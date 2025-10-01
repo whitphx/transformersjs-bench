@@ -1,4 +1,4 @@
-import { pipeline } from "@xenova/transformers";
+import { pipeline } from "@huggingface/transformers";
 
 const btn = document.getElementById("run") as HTMLButtonElement;
 const out = document.getElementById("out") as HTMLPreElement;

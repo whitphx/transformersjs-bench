@@ -27,4 +27,4 @@ npm run dev
 ## Notes
 - Models are fetched from the Hugging Face Hub/CDN the first time.
 - Browser backend selection (WebGPU/WASM) is handled internally by the library.
-- Keep this minimal; extend with warm/cold runs, repetition, and export as needed.
+- This matches your requested dependency versions.

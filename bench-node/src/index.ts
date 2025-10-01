@@ -1,4 +1,4 @@
-import { pipeline } from "@xenova/transformers";
+import { pipeline } from "@huggingface/transformers";
 import { performance } from "node:perf_hooks";
 
 // Minimal Node benchmark:
