@@ -8,7 +8,7 @@
       body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 2rem; }
       button { padding: 0.6rem 1rem; font-size: 1rem; }
       pre { background: #f6f8fa; padding: 1rem; border-radius: 8px; overflow: auto; }
-      .row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+      .row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; }
       label { font-weight: 600; }
       input, select { padding: 0.4rem 0.6rem; }
     </style>
@@ -18,13 +18,20 @@
     <div class="row">
       <label for="model">Model</label>
       <input id="model" value="Xenova/distilbert-base-uncased" size="34" />
-    </div>
-    <div class="row">
       <label for="task">Task</label>
       <select id="task">
         <option value="feature-extraction" selected>feature-extraction</option>
         <option value="text-classification">text-classification</option>
       </select>
+    </div>
+    <div class="row">
+      <label for="mode">Mode</label>
+      <select id="mode">
+        <option value="warm" selected>warm (prefetch + reload)</option>
+        <option value="cold">cold (clear caches once)</option>
+      </select>
+      <label for="repeats">Repeats</label>
+      <input id="repeats" type="number" value="3" min="1" style="width: 5rem;" />
     </div>
     <div class="row">
       <button id="run">Run benchmark</button>

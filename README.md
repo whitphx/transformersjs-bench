@@ -1,30 +1,19 @@
-# transformersjs-bench-min (Minimal Template)
+# transformersjs-bench-min (warm/cold + repeats + p50/p90)
 
-This zip contains two tiny templates to benchmark model *load* and *first inference* times with Transformers.js.
-
-- `bench-node/`: Node.js CLI (WASM backend). Prints a JSON result to stdout.
-- `bench-web/`: Vite + TypeScript browser page. Shows a JSON result on screen.
+Includes:
+- `bench-node/`: Node CLI with `--mode warm|cold`, `--repeats`, `--cache-dir`.
+- `bench-web/`: Browser app with warm (prefetch+reload) / cold (clear caches) and repeats.
 
 ## Quick start
-
-### Node CLI
+### Node
 ```bash
 cd bench-node
 npm i
-npm run bench
-# or model/task override:
-npm run bench -- Xenova/distilbert-base-uncased feature-extraction
+npm run bench -- Xenova/distilbert-base-uncased feature-extraction --mode warm --repeats 5 --cache-dir .bench-cache/warm
 ```
-
-### Browser app (Vite)
+### Web
 ```bash
 cd bench-web
 npm i
 npm run dev
-# open http://localhost:5173 and click "Run benchmark"
 ```
-
-## Notes
-- Models are fetched from the Hugging Face Hub/CDN the first time.
-- Browser backend selection (WebGPU/WASM) is handled internally by the library.
-- This matches your requested dependency versions.
