@@ -32,12 +32,17 @@
       </select>
       <label for="repeats">Repeats</label>
       <input id="repeats" type="number" value="3" min="1" style="width: 5rem;" />
+      <label for="device">Device</label>
+      <select id="device">
+        <option value="webgpu" selected>webgpu</option>
+        <option value="wasm">wasm (CPU)</option>
+      </select>
     </div>
     <div class="row">
       <button id="run">Run benchmark</button>
       <span id="status"></span>
     </div>
-    <pre id="out">{}</pre>
+    <code><pre id="out">{}</pre></code>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
