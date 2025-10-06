@@ -28,11 +28,13 @@ async function main() {
 
   // Start Vite dev server
   const server = await createServer({
+    configFile: false, // Don't load vite.config.ts to avoid permission issues in read-only filesystems
     server: {
       port: 5173,
       strictPort: false,
     },
     logLevel: "error",
+    cacheDir: process.env.VITE_CACHE_DIR || "node_modules/.vite",
   });
 
   await server.listen();
