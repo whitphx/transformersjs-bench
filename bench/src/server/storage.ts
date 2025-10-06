@@ -5,8 +5,10 @@ import { QueuedBenchmark } from "./queue.js";
 export class BenchmarkStorage {
   private filePath: string;
 
-  constructor(filePath: string = "./benchmark-results.jsonl") {
-    this.filePath = path.resolve(filePath);
+  constructor(filePath?: string) {
+    // Use environment variable if set, otherwise fall back to default
+    const defaultPath = process.env.BENCHMARK_RESULTS_PATH || "./benchmark-results.jsonl";
+    this.filePath = path.resolve(filePath || defaultPath);
   }
 
   async appendResult(benchmark: QueuedBenchmark): Promise<void> {

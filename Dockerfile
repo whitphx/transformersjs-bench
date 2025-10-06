@@ -42,12 +42,20 @@ RUN npx playwright install chromium firefox webkit
 WORKDIR /app
 COPY bench/ ./bench/
 
+# Create writable directories for HF Spaces
+RUN mkdir -p /tmp/vite-cache /tmp/bench-data && \
+    chmod -R 777 /tmp/vite-cache /tmp/bench-data
+
 # Expose port
 EXPOSE 7860
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD node -e "require('http').get('http://localhost:7860/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# Set environment variables for writable paths
+ENV VITE_CACHE_DIR=/tmp/vite-cache
+ENV BENCHMARK_RESULTS_PATH=/tmp/bench-data/benchmark-results.jsonl
 
 # Start the server
 WORKDIR /app/bench
