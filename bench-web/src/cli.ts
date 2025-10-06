@@ -16,18 +16,20 @@ const mode = getArg("mode", "warm") as "warm" | "cold";
 const repeats = Math.max(1, parseInt(getArg("repeats", "3") || "3", 10));
 const device = getArg("device", "webgpu") as "webgpu" | "wasm";
 const dtype = getArg("dtype"); // optional: fp32, fp16, q8, q4, etc.
+const batchSize = Math.max(1, parseInt(getArg("batch-size", "1") || "1", 10));
 const browserType = getArg("browser", "chromium") as "chromium" | "firefox" | "webkit";
 const headed = getArg("headed") === "true";
 
 async function main() {
-  console.log(`Model   : ${modelId}`);
-  console.log(`Task    : ${task}`);
-  console.log(`Mode    : ${mode}`);
-  console.log(`Repeats : ${repeats}`);
-  console.log(`Device  : ${device}`);
-  console.log(`DType   : ${dtype || 'auto'}`);
-  console.log(`Browser : ${browserType}`);
-  console.log(`Headed  : ${headed}`);
+  console.log(`Model      : ${modelId}`);
+  console.log(`Task       : ${task}`);
+  console.log(`Mode       : ${mode}`);
+  console.log(`Repeats    : ${repeats}`);
+  console.log(`Device     : ${device}`);
+  console.log(`DType      : ${dtype || 'auto'}`);
+  console.log(`Batch Size : ${batchSize}`);
+  console.log(`Browser    : ${browserType}`);
+  console.log(`Headed     : ${headed}`);
 
   // Start Vite dev server
   const server = await createServer({
@@ -88,23 +90,49 @@ async function main() {
 
     // Check WebGPU availability if using webgpu device
     if (device === "webgpu") {
-      const gpuAvailable = await page.evaluate(() => {
-        return 'gpu' in navigator;
+      const gpuInfo = await page.evaluate(async () => {
+        if (!('gpu' in navigator)) {
+          return { available: false, adapter: null, features: null };
+        }
+        try {
+          const adapter = await (navigator as any).gpu.requestAdapter();
+          if (!adapter) {
+            return { available: false, adapter: null, features: null };
+          }
+          const features = Array.from(adapter.features || []);
+          const limits = adapter.limits ? {
+            maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
+            maxComputeWorkgroupSizeX: adapter.limits.maxComputeWorkgroupSizeX,
+          } : null;
+          return {
+            available: true,
+            adapterInfo: adapter.info ? adapter.info.description : 'Unknown',
+            features,
+            limits
+          };
+        } catch (e) {
+          return { available: false, adapter: null, error: String(e) };
+        }
       });
 
-      if (!gpuAvailable) {
+      if (!gpuInfo.available) {
         console.error("\n❌ WebGPU is not available in this browser!");
         console.error("Make sure to use --enable-unsafe-webgpu flag for Chromium.");
+        if (gpuInfo.error) console.error("Error:", gpuInfo.error);
         throw new Error("WebGPU not available");
       }
 
       console.log("✓ WebGPU is available");
+      console.log(`  Adapter: ${gpuInfo.adapterInfo}`);
+      if (gpuInfo.features && gpuInfo.features.length > 0) {
+        console.log(`  Features: ${gpuInfo.features.slice(0, 3).join(', ')}${gpuInfo.features.length > 3 ? '...' : ''}`);
+      }
     }
 
     // Use the exposed CLI function from main.ts
-    const result = await page.evaluate(({ modelId, task, mode, repeats, device, dtype }) => {
-      return (window as any).runBenchmarkCLI({ modelId, task, mode, repeats, device, dtype });
-    }, { modelId, task, mode, repeats, device, dtype });
+    const result = await page.evaluate(({ modelId, task, mode, repeats, device, dtype, batchSize }) => {
+      return (window as any).runBenchmarkCLI({ modelId, task, mode, repeats, device, dtype, batchSize });
+    }, { modelId, task, mode, repeats, device, dtype, batchSize });
 
     console.log("\n" + JSON.stringify(result, null, 2));
 

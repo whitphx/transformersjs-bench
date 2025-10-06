@@ -36,21 +36,25 @@ async function clearCaches({ clearSession = false }: { clearSession?: boolean } 
     if (clearSession) sessionStorage.clear();
   } catch { }
 }
-async function benchOnce(modelId: string, task: string, device: string, dtype?: string) {
+async function benchOnce(modelId: string, task: string, device: string, dtype?: string, batchSize: number = 1) {
   const t0 = now();
   const options: any = { device };
   if (dtype) options.dtype = dtype;
   const pipe = await pipeline(task, modelId, options);
   const t1 = now();
+
+  // Prepare batch input
+  const inputs = Array(batchSize).fill("The quick brown fox jumps over the lazy dog.");
+
   const t2 = now();
-  await pipe("The quick brown fox jumps over the lazy dog.");
+  await pipe(inputs);
   const t3 = now();
 
   // Run additional inferences to measure subsequent performance
   const subsequentTimes: number[] = [];
   for (let i = 0; i < 3; i++) {
     const t4 = now();
-    await pipe("The quick brown fox jumps over the lazy dog.");
+    await pipe(inputs);
     const t5 = now();
     subsequentTimes.push(+(t5 - t4).toFixed(1));
   }
@@ -61,12 +65,12 @@ async function benchOnce(modelId: string, task: string, device: string, dtype?: 
     subsequent_infer_ms: subsequentTimes
   };
 }
-async function runMany(modelId: string, task: string, repeats: number, device: string, dtype?: string) {
+async function runMany(modelId: string, task: string, repeats: number, device: string, dtype?: string, batchSize: number = 1) {
   const loads: number[] = [];
   const firsts: number[] = [];
   const subsequents: number[] = [];
   for (let i = 0; i < repeats; i++) {
-    const r = await benchOnce(modelId, task, device, dtype);
+    const r = await benchOnce(modelId, task, device, dtype, batchSize);
     loads.push(r.load_ms);
     firsts.push(r.first_infer_ms);
     subsequents.push(...r.subsequent_infer_ms);
@@ -77,16 +81,17 @@ async function runMany(modelId: string, task: string, repeats: number, device: s
     subsequent_infer_ms: { p50: +percentile(subsequents, 0.5).toFixed(1), p90: +percentile(subsequents, 0.9).toFixed(1), raw: subsequents },
   };
 }
-async function runCold(modelId: string, task: string, repeats: number, device: string, dtype?: string) {
+async function runCold(modelId: string, task: string, repeats: number, device: string, dtype?: string, batchSize: number = 1) {
   statusEl.textContent = "clearing caches (cold)...";
   await clearCaches();
   statusEl.textContent = "running (cold)...";
-  const metrics = await runMany(modelId, task, repeats, device, dtype);
+  const metrics = await runMany(modelId, task, repeats, device, dtype, batchSize);
   const result: any = {
     platform: "browser",
     runtime: navigator.userAgent,
     mode: "cold",
     repeats,
+    batchSize,
     model: modelId,
     task,
     device,
@@ -96,19 +101,21 @@ async function runCold(modelId: string, task: string, repeats: number, device: s
   if (dtype) result.dtype = dtype;
   return result;
 }
-async function runWarmDirect(modelId: string, task: string, repeats: number, device: string, dtype?: string) {
+async function runWarmDirect(modelId: string, task: string, repeats: number, device: string, dtype?: string, batchSize: number = 1) {
   statusEl.textContent = "prefetching (warmup) ...";
   const options: any = { device };
   if (dtype) options.dtype = dtype;
   const p = await pipeline(task, modelId, options);
-  await p("warmup");
+  const warmupInputs = Array(batchSize).fill("warmup");
+  await p(warmupInputs);
   statusEl.textContent = "running (warm)...";
-  const metrics = await runMany(modelId, task, repeats, device, dtype);
+  const metrics = await runMany(modelId, task, repeats, device, dtype, batchSize);
   const result: any = {
     platform: "browser",
     runtime: navigator.userAgent,
     mode: "warm",
     repeats,
+    batchSize,
     model: modelId,
     task,
     device,
@@ -117,20 +124,21 @@ async function runWarmDirect(modelId: string, task: string, repeats: number, dev
   if (dtype) result.dtype = dtype;
   return result;
 }
-async function runWarm(modelId: string, task: string, repeats: number, device: string, dtype?: string) {
+async function runWarm(modelId: string, task: string, repeats: number, device: string, dtype?: string, batchSize: number = 1) {
   const flag = sessionStorage.getItem("__warm_ready__");
   if (!flag) {
     statusEl.textContent = "prefetching (warmup) ...";
     const options: any = { device };
     if (dtype) options.dtype = dtype;
     const p = await pipeline(task, modelId, options);
-    await p("warmup");
-    sessionStorage.setItem("__warm_ready__", JSON.stringify({ modelId, task, repeats, device, dtype }));
+    const warmupInputs = Array(batchSize).fill("warmup");
+    await p(warmupInputs);
+    sessionStorage.setItem("__warm_ready__", JSON.stringify({ modelId, task, repeats, device, dtype, batchSize }));
     location.reload();
     return null;
   } else {
     sessionStorage.removeItem("__warm_ready__");
-    return await runWarmDirect(modelId, task, repeats, device, dtype);
+    return await runWarmDirect(modelId, task, repeats, device, dtype, batchSize);
   }
 }
 async function run() {
@@ -160,11 +168,12 @@ btn.addEventListener("click", () => {
 });
 
 // Expose for CLI use
-(window as any).runBenchmarkCLI = async function (params: { modelId: string, task: string, mode: string, repeats: number, device: string, dtype?: string }) {
+(window as any).runBenchmarkCLI = async function (params: { modelId: string, task: string, mode: string, repeats: number, device: string, dtype?: string, batchSize?: number }) {
+  const batchSize = params.batchSize || 1;
   if (params.mode === "cold") {
-    return await runCold(params.modelId, params.task, params.repeats, params.device, params.dtype);
+    return await runCold(params.modelId, params.task, params.repeats, params.device, params.dtype, batchSize);
   } else {
     // For warm, use the direct function that skips reload logic
-    return await runWarmDirect(params.modelId, params.task, params.repeats, params.device, params.dtype);
+    return await runWarmDirect(params.modelId, params.task, params.repeats, params.device, params.dtype, batchSize);
   }
 };

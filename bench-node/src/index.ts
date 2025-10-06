@@ -18,6 +18,7 @@ const mode = (getArg("mode", "warm") as "warm" | "cold");
 const repeats = Math.max(1, parseInt(getArg("repeats", "3") || "3", 10));
 const cacheDir = getArg("cache-dir", path.resolve(".bench-cache/default"))!;
 const dtype = getArg("dtype"); // optional: fp32, fp16, q8, q4, etc.
+const batchSize = Math.max(1, parseInt(getArg("batch-size", "1") || "1", 10));
 
 // Point library cache to a dedicated directory for controllable cold/warm behavior
 env.cacheDir = cacheDir;
@@ -41,15 +42,18 @@ async function benchOnce() {
   const pipe = await pipeline(task, modelId, options);
   const t1 = performance.now();
 
+  // Prepare batch input
+  const inputs = Array(batchSize).fill("The quick brown fox jumps over the lazy dog.");
+
   const t2 = performance.now();
-  await pipe("The quick brown fox jumps over the lazy dog.");
+  await pipe(inputs);
   const t3 = performance.now();
 
   // Run additional inferences to measure subsequent performance
   const subsequentTimes: number[] = [];
   for (let i = 0; i < 3; i++) {
     const t4 = performance.now();
-    await pipe("The quick brown fox jumps over the lazy dog.");
+    await pipe(inputs);
     const t5 = performance.now();
     subsequentTimes.push(+(t5 - t4).toFixed(1));
   }
@@ -62,12 +66,13 @@ async function benchOnce() {
 }
 
 async function main() {
-  console.log(`Model  : ${modelId}`);
-  console.log(`Task   : ${task}`);
-  console.log(`Mode   : ${mode}`);
-  console.log(`Repeats: ${repeats}`);
-  console.log(`DType  : ${dtype || 'auto'}`);
-  console.log(`Cache  : ${cacheDir}`);
+  console.log(`Model     : ${modelId}`);
+  console.log(`Task      : ${task}`);
+  console.log(`Mode      : ${mode}`);
+  console.log(`Repeats   : ${repeats}`);
+  console.log(`DType     : ${dtype || 'auto'}`);
+  console.log(`Batch Size: ${batchSize}`);
+  console.log(`Cache     : ${cacheDir}`);
 
   const loads: number[] = [];
   const firsts: number[] = [];
@@ -79,7 +84,8 @@ async function main() {
     const warmOptions: any = {};
     if (dtype) warmOptions.dtype = dtype;
     const warm = await pipeline(task, modelId, warmOptions);
-    await warm("warmup");
+    const warmupInputs = Array(batchSize).fill("warmup");
+    await warm(warmupInputs);
 
     for (let i = 0; i < repeats; i++) {
       const r = await benchOnce();
@@ -105,6 +111,7 @@ async function main() {
     task,
     mode,
     repeats,
+    batchSize,
     cacheDir,
     metrics: {
       load_ms: { p50: +percentile(loads, 0.5).toFixed(1), p90: +percentile(loads, 0.9).toFixed(1), raw: loads },
