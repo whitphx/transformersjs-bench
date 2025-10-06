@@ -35,7 +35,10 @@ COPY bench/package*.json ./bench/
 WORKDIR /app/bench
 RUN npm ci
 
-# Install Playwright browsers
+# Set Playwright browsers path to a shared location
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers
+
+# Install Playwright browsers to shared location
 RUN npx playwright install chromium firefox webkit
 
 # Copy source code
