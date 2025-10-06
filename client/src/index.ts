@@ -4,7 +4,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { table } from "table";
 
-const SERVER_URL = process.env.BENCH_SERVER_URL || "http://localhost:3000";
+const SERVER_URL = process.env.BENCH_SERVER_URL || "http://localhost:7860";
 
 interface SubmitOptions {
   platform?: "node" | "web";
