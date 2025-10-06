@@ -1,0 +1,17 @@
+{
+  "name": "client",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "cli": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/yargs": "^17.0.33",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

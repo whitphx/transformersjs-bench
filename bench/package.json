@@ -7,13 +7,17 @@
     "bench": "tsx src/index.ts",
     "bench:node": "tsx src/node/index.ts",
     "bench:web": "tsx src/web/cli.ts",
+    "bench:install": "playwright install",
+    "server": "tsx src/server/index.ts",
+    "server:dev": "tsx watch src/server/index.ts",
     "dev": "vite",
     "build": "tsc -p tsconfig.json",
-    "preview": "vite preview",
-    "bench:install": "playwright install"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.7.4"
+    "@hono/node-server": "^1.19.5",
+    "@huggingface/transformers": "^3.7.4",
+    "hono": "^4.9.10"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.1",

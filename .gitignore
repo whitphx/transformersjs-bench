@@ -133,3 +133,6 @@ dist
 bench/.bench-cache
 bench-node/.bench-cache
 bench-web/.transformers-cache
+
+# Benchmark result files
+bench/benchmark-results.jsonl
