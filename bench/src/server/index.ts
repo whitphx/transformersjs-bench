@@ -232,7 +232,7 @@ curl -X POST http://localhost:3000/api/benchmark \\
   `);
 });
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 7860;
 
 serve({
   fetch: app.fetch,
