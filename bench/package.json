@@ -1,13 +1,15 @@
 {
-  "name": "bench-web",
+  "name": "bench",
   "private": true,
-  "version": "0.0.2",
   "type": "module",
+  "version": "0.0.2",
   "scripts": {
+    "bench": "tsx src/index.ts",
+    "bench:node": "tsx src/node/index.ts",
+    "bench:web": "tsx src/web/cli.ts",
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc -p tsconfig.json",
     "preview": "vite preview",
-    "bench:cli": "tsx src/cli.ts",
     "bench:install": "playwright install"
   },
   "dependencies": {

@@ -128,3 +128,8 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Benchmark cache directories
+bench/.bench-cache
+bench-node/.bench-cache
+bench-web/.transformers-cache

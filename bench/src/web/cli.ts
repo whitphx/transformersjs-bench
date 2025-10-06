@@ -1,16 +1,11 @@
-import { chromium, firefox, webkit, Browser, Page } from "playwright";
+import { chromium, firefox, webkit, Browser } from "playwright";
 import { createServer } from "vite";
+import { getArg } from "../core/args.js";
 
 // CLI for running browser benchmarks headlessly via Playwright
 
 const modelId = process.argv[2] || "Xenova/distilbert-base-uncased";
 const task = process.argv[3] || "feature-extraction";
-
-function getArg(name: string, def?: string) {
-  const i = process.argv.indexOf(`--${name}`);
-  if (i !== -1 && i + 1 < process.argv.length) return process.argv[i + 1];
-  return def;
-}
 
 const mode = getArg("mode", "warm") as "warm" | "cold";
 const repeats = Math.max(1, parseInt(getArg("repeats", "3") || "3", 10));
@@ -142,7 +137,14 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// Check if this module is being run directly (not imported)
+const isMainModule = process.argv[1]?.includes('web/cli');
+
+if (isMainModule) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
+
+export { main };
