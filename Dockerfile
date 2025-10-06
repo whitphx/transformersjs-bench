@@ -1,6 +1,6 @@
 FROM node:22-slim
 
-# Install dependencies for Playwright browsers
+# Install dependencies for Playwright browsers (including headed mode support)
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -24,6 +24,10 @@ RUN apt-get update && apt-get install -y \
     libxkbcommon0 \
     libxrandr2 \
     xdg-utils \
+    xvfb \
+    x11vnc \
+    fluxbox \
+    dbus-x11 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -45,6 +49,9 @@ RUN npx playwright install chromium firefox webkit
 WORKDIR /app
 COPY bench/ ./bench/
 
+# Make startup script executable
+RUN chmod +x /app/bench/start.sh
+
 # Create writable directories for HF Spaces
 RUN mkdir -p /tmp/vite-cache /tmp/bench-data && \
     chmod -R 777 /tmp/vite-cache /tmp/bench-data
@@ -62,4 +69,4 @@ ENV BENCHMARK_RESULTS_PATH=/tmp/bench-data/benchmark-results.jsonl
 
 # Start the server
 WORKDIR /app/bench
-CMD ["npm", "run", "server"]
+CMD ["./start.sh"]
