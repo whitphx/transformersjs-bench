@@ -2,6 +2,7 @@
 
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import { table } from "table";
 
 const SERVER_URL = process.env.BENCH_SERVER_URL || "http://localhost:3000";
 
@@ -121,8 +122,9 @@ yargs(hideBin(process.argv))
           default: 1,
         })
         .option("dtype", {
-          describe: "Data type (fp32, fp16, q8, etc.)",
-          type: "string",
+          describe: "Data type",
+          choices: ["fp32", "fp16", "q8", "int8", "uint8", "q4", "bnb4", "q4f16"] as const,
+          default: "fp32" as const,
         })
         .option("device", {
           describe: "Device for web platform",
@@ -153,16 +155,14 @@ yargs(hideBin(process.argv))
         mode: argv.mode,
         repeats: argv.repeats,
         batchSize: argv.batchSize,
+        dtype: argv.dtype,
         device: argv.device,
         browser: argv.browser,
         headed: argv.headed,
       };
 
-      if (argv.dtype) {
-        options.dtype = argv.dtype;
-      }
-
-      console.log("Submitting benchmark...");
+      console.log("Submitting benchmark with options:");
+      console.log(JSON.stringify(options, null, 2));
       const result = await submitBenchmark(options);
       console.log(`✓ Benchmark queued: ${result.id}`);
       console.log(`  Position in queue: ${result.position}`);
@@ -195,19 +195,43 @@ yargs(hideBin(process.argv))
   .command(
     "list",
     "List all benchmark results",
-    () => {},
+    () => { },
     async () => {
       const result = await listBenchmarks();
       console.log(`Total benchmarks: ${result.total}\n`);
+
+      const data = [
+        ["ID", "Status", "Platform", "Model", "Task", "Mode", "Repeats", "Batch", "DType", "Device", "Browser", "Duration"],
+      ];
+
       result.results.forEach((b: any) => {
-        console.log(`${b.id} - ${b.status} - ${b.platform}/${b.modelId}/${b.task}`);
+        const duration = b.completedAt && b.startedAt
+          ? `${((b.completedAt - b.startedAt) / 1000).toFixed(1)}s`
+          : "-";
+
+        data.push([
+          b.id.substring(0, 8),
+          b.status,
+          b.platform,
+          b.modelId,
+          b.task,
+          b.mode,
+          b.repeats.toString(),
+          b.batchSize.toString(),
+          b.dtype || "-",
+          b.device || "-",
+          b.browser || "-",
+          duration,
+        ]);
       });
+
+      console.log(table(data));
     }
   )
   .command(
     "queue",
     "Show queue status",
-    () => {},
+    () => { },
     async () => {
       const result = await getQueueStatus();
       console.log("Queue Status:");
