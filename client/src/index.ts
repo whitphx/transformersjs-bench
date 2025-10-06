@@ -201,7 +201,7 @@ yargs(hideBin(process.argv))
       console.log(`Total benchmarks: ${result.total}\n`);
 
       const data = [
-        ["ID", "Status", "Platform", "Model", "Task", "Mode", "Repeats", "Batch", "DType", "Device", "Browser", "Duration"],
+        ["ID", "Status", "Platform", "Model", "Task", "Mode", "Repeats", "Batch", "DType", "Device", "Browser", "Headed", "Duration"],
       ];
 
       result.results.forEach((b: any) => {
@@ -209,10 +209,25 @@ yargs(hideBin(process.argv))
           ? `${((b.completedAt - b.startedAt) / 1000).toFixed(1)}s`
           : "-";
 
+        // Status with emoji
+        const statusMap: Record<string, string> = {
+          completed: "✅ completed",
+          failed: "❌ failed",
+          running: "🔄 running",
+          pending: "⏳ pending",
+        };
+        const statusDisplay = statusMap[b.status] || b.status;
+
+        // Platform with emoji
+        const platformDisplay = b.platform === "node" ? "🟢 node" : "🌐 web";
+
+        // Headed with emoji
+        const headedDisplay = b.headed ? "👁️ Yes" : "No";
+
         data.push([
           b.id.substring(0, 8),
-          b.status,
-          b.platform,
+          statusDisplay,
+          platformDisplay,
           b.modelId,
           b.task,
           b.mode,
@@ -221,6 +236,7 @@ yargs(hideBin(process.argv))
           b.dtype || "-",
           b.device || "-",
           b.browser || "-",
+          headedDisplay,
           duration,
         ]);
       });
