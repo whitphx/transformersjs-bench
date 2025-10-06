@@ -43,11 +43,30 @@ async function main() {
   console.log(`Vite server started at ${url}`);
 
   let browser: Browser;
+
+  // Build args based on mode
+  const args = device === "wasm"
+    ? ["--disable-gpu", "--disable-software-rasterizer"]
+    : [
+        // Official WebGPU flags from Chrome team
+        // https://developer.chrome.com/blog/supercharge-web-ai-testing#enable-webgpu
+        "--enable-unsafe-webgpu",
+        "--enable-features=Vulkan",
+      ];
+
+  // Add headless-specific flags only in headless mode
+  if (!headed && device !== "wasm") {
+    args.push(
+      "--no-sandbox",
+      "--headless=new",
+      "--use-angle=vulkan",
+      "--disable-vulkan-surface"
+    );
+  }
+
   const launchOptions = {
     headless: !headed,
-    args: device === "wasm"
-      ? ["--disable-gpu", "--disable-software-rasterizer"]
-      : ["--enable-unsafe-webgpu", "--enable-features=Vulkan"]
+    args,
   };
 
   switch (browserType) {

@@ -105,6 +105,20 @@ bench/
 └── vite.config.ts
 ```
 
+## ⚠️ Important: WebGPU Headless Limitations
+
+**WebGPU performance in headless mode is significantly degraded** (~25× slower than headed mode on macOS). This is a known limitation of headless browsers:
+
+- **Headless mode**: Uses software rendering, giving misleading results
+- **Headed mode** (`--headed=true`): Uses actual GPU, reflects real performance
+- **Interactive UI** (`npm run dev`): Best for accurate WebGPU benchmarks
+
+**Recommendation**: For WebGPU benchmarks, always use `--headed=true` or test interactively in a browser.
+
+See: [Chrome WebGPU Testing Guide](https://developer.chrome.com/blog/supercharge-web-ai-testing#enable-webgpu) | [Playwright GPU Issues](https://github.com/microsoft/playwright/issues/11627)
+
+---
+
 ## Output Format
 
 All benchmarks output JSON with the following structure:
