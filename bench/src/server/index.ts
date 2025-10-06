@@ -4,6 +4,7 @@ import { serve } from "@hono/node-server";
 import { BenchmarkQueue, BenchmarkRequest } from "./queue.js";
 import { BenchmarkStorage } from "./storage.js";
 import { randomUUID } from "crypto";
+import { z } from "zod";
 
 const app = new Hono();
 const queue = new BenchmarkQueue();
@@ -50,51 +51,60 @@ queue.on("failed", (benchmark) => {
 
 // API Endpoints
 
+// Zod schema for benchmark request validation
+const BenchmarkRequestSchema = z.object({
+  platform: z.enum(["node", "web"]).default("node"),
+  modelId: z.string().min(1, "modelId is required"),
+  task: z.string().min(1, "task is required"),
+  mode: z.enum(["warm", "cold"]).default("warm"),
+  repeats: z.number().int().positive().default(3),
+  dtype: z.enum(["fp32", "fp16", "q8", "int8", "uint8", "q4", "bnb4", "q4f16"]).optional(),
+  batchSize: z.number().int().positive().default(1),
+  device: z.string().default("webgpu"),
+  browser: z.enum(["chromium", "firefox", "webkit"]).default("chromium"),
+  headed: z.boolean().default(false),
+});
+
 /**
  * POST /api/benchmark
  * Submit a new benchmark request
  */
 app.post("/api/benchmark", async (c) => {
-  const body = await c.req.json();
-  const {
-    platform = "node",
-    modelId,
-    task,
-    mode = "warm",
-    repeats = 3,
-    dtype,
-    batchSize = 1,
-    device = "webgpu",
-    browser = "chromium",
-    headed = false,
-  } = body;
+  try {
+    const body = await c.req.json();
+    const validated = BenchmarkRequestSchema.parse(body);
 
-  if (!modelId || !task) {
-    return c.json({ error: "modelId and task are required" }, 400);
+    const request: BenchmarkRequest = {
+      id: randomUUID(),
+      platform: validated.platform,
+      modelId: validated.modelId,
+      task: validated.task,
+      mode: validated.mode,
+      repeats: validated.repeats,
+      dtype: validated.dtype,
+      batchSize: validated.batchSize,
+      device: validated.device,
+      browser: validated.browser,
+      headed: validated.headed,
+      timestamp: Date.now(),
+    };
+
+    queue.addBenchmark(request);
+
+    return c.json({
+      id: request.id,
+      message: "Benchmark queued",
+      position: queue.getQueueStatus().pending,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({
+        error: "Validation error",
+        details: error.format()
+      }, 400);
+    }
+    return c.json({ error: "Invalid request" }, 400);
   }
-
-  const request: BenchmarkRequest = {
-    id: randomUUID(),
-    platform,
-    modelId,
-    task,
-    mode,
-    repeats,
-    dtype,
-    batchSize,
-    device,
-    browser,
-    headed,
-    timestamp: Date.now(),
-  };
-
-  queue.addBenchmark(request);
-
-  return c.json({
-    id: request.id,
-    message: "Benchmark queued",
-    position: queue.getQueueStatus().pending,
-  });
 });
 
 /**
