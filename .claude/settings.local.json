@@ -6,7 +6,16 @@
       "Bash(npm run bench:cli:*)",
       "Bash(timeout 120 npm run bench:cli -- Xenova/all-MiniLM-L6-v2 feature-extraction --mode warm --repeats 2 --device wasm)",
       "Bash(timeout 120 npm run bench:cli -- Xenova/all-MiniLM-L6-v2 feature-extraction --mode warm --repeats 2 --device webgpu)",
-      "Bash(timeout 180 npm run bench:cli -- Xenova/all-MiniLM-L6-v2 feature-extraction --mode cold --repeats 2 --device wasm)"
+      "Bash(timeout 180 npm run bench:cli -- Xenova/all-MiniLM-L6-v2 feature-extraction --mode cold --repeats 2 --device wasm)",
+      "Bash(timeout 180 npm run bench:cli -- Xenova/distilbert-base-uncased feature-extraction --mode warm --repeats 2 --device wasm)",
+      "Bash(timeout 180 npm run bench:cli -- Xenova/distilbert-base-uncased feature-extraction --mode warm --repeats 2 --device webgpu)",
+      "Bash(timeout 120 npm run bench:cli -- Xenova/distilbert-base-uncased feature-extraction --mode warm --repeats 2 --device wasm --dtype fp32)",
+      "Bash(cd:*)",
+      "Bash(timeout 120 npm run bench:cli -- Xenova/distilbert-base-uncased feature-extraction --mode warm --repeats 2 --device wasm --dtype q8)",
+      "Bash(timeout 120 npm run bench:cli -- Xenova/distilbert-base-uncased feature-extraction --mode warm --repeats 2 --device webgpu --dtype q8)",
+      "Bash(timeout 180 npm run bench:cli -- Xenova/bert-base-uncased feature-extraction --mode warm --repeats 2 --device wasm --dtype fp32)",
+      "Bash(timeout 180 npm run bench:cli -- Xenova/bert-base-uncased feature-extraction --mode warm --repeats 2 --device webgpu --dtype fp32)",
+      "Bash(timeout 180 npm run bench:cli -- Xenova/bert-base-uncased feature-extraction --mode warm --repeats 2 --device wasm --dtype q8)"
     ],
     "deny": [],
     "ask": []

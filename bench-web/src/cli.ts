@@ -15,6 +15,7 @@ function getArg(name: string, def?: string) {
 const mode = getArg("mode", "warm") as "warm" | "cold";
 const repeats = Math.max(1, parseInt(getArg("repeats", "3") || "3", 10));
 const device = getArg("device", "webgpu") as "webgpu" | "wasm";
+const dtype = getArg("dtype"); // optional: fp32, fp16, q8, q4, etc.
 const browserType = getArg("browser", "chromium") as "chromium" | "firefox" | "webkit";
 const headed = getArg("headed") === "true";
 
@@ -24,6 +25,7 @@ async function main() {
   console.log(`Mode    : ${mode}`);
   console.log(`Repeats : ${repeats}`);
   console.log(`Device  : ${device}`);
+  console.log(`DType   : ${dtype || 'auto'}`);
   console.log(`Browser : ${browserType}`);
   console.log(`Headed  : ${headed}`);
 
@@ -84,10 +86,25 @@ async function main() {
 
     console.log("\nStarting benchmark...");
 
+    // Check WebGPU availability if using webgpu device
+    if (device === "webgpu") {
+      const gpuAvailable = await page.evaluate(() => {
+        return 'gpu' in navigator;
+      });
+
+      if (!gpuAvailable) {
+        console.error("\n❌ WebGPU is not available in this browser!");
+        console.error("Make sure to use --enable-unsafe-webgpu flag for Chromium.");
+        throw new Error("WebGPU not available");
+      }
+
+      console.log("✓ WebGPU is available");
+    }
+
     // Use the exposed CLI function from main.ts
-    const result = await page.evaluate(({ modelId, task, mode, repeats, device }) => {
-      return (window as any).runBenchmarkCLI({ modelId, task, mode, repeats, device });
-    }, { modelId, task, mode, repeats, device });
+    const result = await page.evaluate(({ modelId, task, mode, repeats, device, dtype }) => {
+      return (window as any).runBenchmarkCLI({ modelId, task, mode, repeats, device, dtype });
+    }, { modelId, task, mode, repeats, device, dtype });
 
     console.log("\n" + JSON.stringify(result, null, 2));
 

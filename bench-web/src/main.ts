@@ -36,34 +36,53 @@ async function clearCaches({ clearSession = false }: { clearSession?: boolean } 
     if (clearSession) sessionStorage.clear();
   } catch { }
 }
-async function benchOnce(modelId: string, task: string, device: string) {
+async function benchOnce(modelId: string, task: string, device: string, dtype?: string) {
   const t0 = now();
-  const pipe = await pipeline(task, modelId, { device });
+  const options: any = { device };
+  if (dtype) options.dtype = dtype;
+  const pipe = await pipeline(task, modelId, options);
   const t1 = now();
   const t2 = now();
   await pipe("The quick brown fox jumps over the lazy dog.");
   const t3 = now();
-  return { load_ms: +(t1 - t0).toFixed(1), first_infer_ms: +(t3 - t2).toFixed(1) };
+
+  // Run additional inferences to measure subsequent performance
+  const subsequentTimes: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    const t4 = now();
+    await pipe("The quick brown fox jumps over the lazy dog.");
+    const t5 = now();
+    subsequentTimes.push(+(t5 - t4).toFixed(1));
+  }
+
+  return {
+    load_ms: +(t1 - t0).toFixed(1),
+    first_infer_ms: +(t3 - t2).toFixed(1),
+    subsequent_infer_ms: subsequentTimes
+  };
 }
-async function runMany(modelId: string, task: string, repeats: number, device: string) {
+async function runMany(modelId: string, task: string, repeats: number, device: string, dtype?: string) {
   const loads: number[] = [];
   const firsts: number[] = [];
+  const subsequents: number[] = [];
   for (let i = 0; i < repeats; i++) {
-    const r = await benchOnce(modelId, task, device);
+    const r = await benchOnce(modelId, task, device, dtype);
     loads.push(r.load_ms);
     firsts.push(r.first_infer_ms);
+    subsequents.push(...r.subsequent_infer_ms);
   }
   return {
     load_ms: { p50: +percentile(loads, 0.5).toFixed(1), p90: +percentile(loads, 0.9).toFixed(1), raw: loads },
     first_infer_ms: { p50: +percentile(firsts, 0.5).toFixed(1), p90: +percentile(firsts, 0.9).toFixed(1), raw: firsts },
+    subsequent_infer_ms: { p50: +percentile(subsequents, 0.5).toFixed(1), p90: +percentile(subsequents, 0.9).toFixed(1), raw: subsequents },
   };
 }
-async function runCold(modelId: string, task: string, repeats: number, device: string) {
+async function runCold(modelId: string, task: string, repeats: number, device: string, dtype?: string) {
   statusEl.textContent = "clearing caches (cold)...";
   await clearCaches();
   statusEl.textContent = "running (cold)...";
-  const metrics = await runMany(modelId, task, repeats, device);
-  return {
+  const metrics = await runMany(modelId, task, repeats, device, dtype);
+  const result: any = {
     platform: "browser",
     runtime: navigator.userAgent,
     mode: "cold",
@@ -74,14 +93,18 @@ async function runCold(modelId: string, task: string, repeats: number, device: s
     metrics,
     notes: "Only the 1st iteration is strictly cold in a single page session."
   };
+  if (dtype) result.dtype = dtype;
+  return result;
 }
-async function runWarmDirect(modelId: string, task: string, repeats: number, device: string) {
+async function runWarmDirect(modelId: string, task: string, repeats: number, device: string, dtype?: string) {
   statusEl.textContent = "prefetching (warmup) ...";
-  const p = await pipeline(task, modelId, { device });
+  const options: any = { device };
+  if (dtype) options.dtype = dtype;
+  const p = await pipeline(task, modelId, options);
   await p("warmup");
   statusEl.textContent = "running (warm)...";
-  const metrics = await runMany(modelId, task, repeats, device);
-  return {
+  const metrics = await runMany(modelId, task, repeats, device, dtype);
+  const result: any = {
     platform: "browser",
     runtime: navigator.userAgent,
     mode: "warm",
@@ -91,19 +114,23 @@ async function runWarmDirect(modelId: string, task: string, repeats: number, dev
     device,
     metrics
   };
+  if (dtype) result.dtype = dtype;
+  return result;
 }
-async function runWarm(modelId: string, task: string, repeats: number, device: string) {
+async function runWarm(modelId: string, task: string, repeats: number, device: string, dtype?: string) {
   const flag = sessionStorage.getItem("__warm_ready__");
   if (!flag) {
     statusEl.textContent = "prefetching (warmup) ...";
-    const p = await pipeline(task, modelId, { device });
+    const options: any = { device };
+    if (dtype) options.dtype = dtype;
+    const p = await pipeline(task, modelId, options);
     await p("warmup");
-    sessionStorage.setItem("__warm_ready__", JSON.stringify({ modelId, task, repeats, device }));
+    sessionStorage.setItem("__warm_ready__", JSON.stringify({ modelId, task, repeats, device, dtype }));
     location.reload();
     return null;
   } else {
     sessionStorage.removeItem("__warm_ready__");
-    return await runWarmDirect(modelId, task, repeats, device);
+    return await runWarmDirect(modelId, task, repeats, device, dtype);
   }
 }
 async function run() {
@@ -133,11 +160,11 @@ btn.addEventListener("click", () => {
 });
 
 // Expose for CLI use
-(window as any).runBenchmarkCLI = async function (params: { modelId: string, task: string, mode: string, repeats: number, device: string }) {
+(window as any).runBenchmarkCLI = async function (params: { modelId: string, task: string, mode: string, repeats: number, device: string, dtype?: string }) {
   if (params.mode === "cold") {
-    return await runCold(params.modelId, params.task, params.repeats, params.device);
+    return await runCold(params.modelId, params.task, params.repeats, params.device, params.dtype);
   } else {
     // For warm, use the direct function that skips reload logic
-    return await runWarmDirect(params.modelId, params.task, params.repeats, params.device);
+    return await runWarmDirect(params.modelId, params.task, params.repeats, params.device, params.dtype);
   }
 };
