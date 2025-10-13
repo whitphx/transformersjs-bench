@@ -132,9 +132,19 @@ app.get("/api/benchmark/:id", async (c) => {
 /**
  * GET /api/benchmarks
  * Get all benchmark results from storage
+ * Query params:
+ * - modelId: Filter by model ID
  */
 app.get("/api/benchmarks", async (c) => {
-  const results = await storage.getAllResults();
+  const modelId = c.req.query("modelId");
+
+  let results;
+  if (modelId) {
+    results = await storage.getResultsByModel(modelId);
+  } else {
+    results = await storage.getAllResults();
+  }
+
   return c.json({
     total: results.length,
     results,

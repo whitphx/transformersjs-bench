@@ -136,3 +136,4 @@ bench-web/.transformers-cache
 
 # Benchmark result files
 bench/benchmark-results.jsonl
+bench/benchmark-results/
