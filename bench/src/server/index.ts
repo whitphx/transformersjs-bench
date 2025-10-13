@@ -3,23 +3,54 @@ import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
 import { BenchmarkQueue, BenchmarkRequest } from "./queue.js";
 import { BenchmarkStorage } from "./storage.js";
+import { HFDatasetUploader } from "./hf-dataset.js";
 import { randomUUID } from "crypto";
 import { z } from "zod";
+import { config as dotenvConfig } from "dotenv";
+
+// Load environment variables
+dotenvConfig();
 
 const app = new Hono();
 const queue = new BenchmarkQueue();
 const storage = new BenchmarkStorage();
 
+// Initialize HF Dataset uploader if configured
+const hfUploader = new HFDatasetUploader(
+  process.env.HF_DATASET_REPO && process.env.HF_TOKEN
+    ? {
+        repo: process.env.HF_DATASET_REPO,
+        token: process.env.HF_TOKEN,
+      }
+    : undefined
+);
+
+if (hfUploader.isEnabled()) {
+  console.log(`📤 HF Dataset upload enabled: ${process.env.HF_DATASET_REPO}`);
+} else {
+  console.log("📤 HF Dataset upload disabled (set HF_DATASET_REPO and HF_TOKEN to enable)");
+}
+
 // Enable CORS for development
 app.use("/*", cors());
 
-// Store completed benchmarks to file
+// Store completed benchmarks to file and upload to HF Dataset
 queue.on("completed", async (benchmark) => {
   try {
     await storage.appendResult(benchmark);
     console.log(`✓ Benchmark ${benchmark.id} saved to file`);
   } catch (error) {
     console.error(`✗ Failed to save benchmark ${benchmark.id}:`, error);
+  }
+
+  // Upload to HF Dataset if enabled
+  if (hfUploader.isEnabled()) {
+    try {
+      await hfUploader.uploadResult(benchmark);
+    } catch (error) {
+      console.error(`✗ Failed to upload benchmark ${benchmark.id} to HF Dataset:`, error);
+      // Don't fail the whole operation if HF upload fails
+    }
   }
 });
 
@@ -29,6 +60,15 @@ queue.on("failed", async (benchmark) => {
     console.log(`✗ Failed benchmark ${benchmark.id} saved to file`);
   } catch (error) {
     console.error(`✗ Failed to save failed benchmark ${benchmark.id}:`, error);
+  }
+
+  // Also upload failed benchmarks to HF Dataset if enabled (for tracking failures)
+  if (hfUploader.isEnabled()) {
+    try {
+      await hfUploader.uploadResult(benchmark);
+    } catch (error) {
+      console.error(`✗ Failed to upload failed benchmark ${benchmark.id} to HF Dataset:`, error);
+    }
   }
 });
 

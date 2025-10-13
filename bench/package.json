@@ -16,7 +16,9 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.5",
+    "@huggingface/hub": "^2.6.12",
     "@huggingface/transformers": "^3.7.4",
+    "dotenv": "^17.2.3",
     "hono": "^4.9.10",
     "zod": "^4.1.11"
   },
