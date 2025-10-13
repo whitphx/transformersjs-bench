@@ -320,6 +320,11 @@ yargs(hideBin(process.argv))
           type: "array",
           default: ["chromium"],
         })
+        .option("dtype", {
+          describe: "Data type(s) (can specify multiple)",
+          type: "array",
+          default: ["fp32"],
+        })
         .option("yes", {
           alias: "y",
           describe: "Skip confirmation prompt",
@@ -353,6 +358,7 @@ yargs(hideBin(process.argv))
       const batchSizes = argv.batchSize as number[];
       const devices = argv.device as string[];
       const browsers = argv.browser as string[];
+      const dtypes = argv.dtype as string[];
 
       const combinations: Array<{
         modelId: string;
@@ -361,6 +367,7 @@ yargs(hideBin(process.argv))
         batchSize: number;
         device: string;
         browser: string;
+        dtype: string;
       }> = [];
 
       for (const model of models) {
@@ -369,14 +376,17 @@ yargs(hideBin(process.argv))
             for (const batchSize of batchSizes) {
               for (const device of devices) {
                 for (const browser of browsers) {
-                  combinations.push({
-                    modelId: (model as any).name || model.id,
-                    platform,
-                    mode,
-                    batchSize,
-                    device,
-                    browser,
-                  });
+                  for (const dtype of dtypes) {
+                    combinations.push({
+                      modelId: (model as any).name || model.id,
+                      platform,
+                      mode,
+                      batchSize,
+                      device,
+                      browser,
+                      dtype,
+                    });
+                  }
                 }
               }
             }
@@ -391,6 +401,7 @@ yargs(hideBin(process.argv))
       console.log(`  Batch Sizes: ${batchSizes.join(", ")}`);
       console.log(`  Devices: ${devices.join(", ")}`);
       console.log(`  Browsers: ${browsers.join(", ")}`);
+      console.log(`  DTypes: ${dtypes.join(", ")}`);
       console.log(`  Total benchmarks: ${combinations.length}`);
 
       // Ask for confirmation unless -y flag is used
@@ -422,16 +433,17 @@ yargs(hideBin(process.argv))
             mode: combo.mode as "warm" | "cold",
             repeats: argv.repeats,
             batchSize: combo.batchSize,
+            dtype: combo.dtype,
             device: combo.device,
             browser: combo.browser as "chromium" | "firefox" | "webkit",
           };
 
           const result = await submitBenchmark(options);
-          const desc = `${combo.modelId} [${combo.platform}/${combo.device}/${combo.mode}/b${combo.batchSize}]`;
+          const desc = `${combo.modelId} [${combo.platform}/${combo.device}/${combo.mode}/b${combo.batchSize}/${combo.dtype}]`;
           submitted.push(desc);
           console.log(`✓ Queued: ${desc} (${result.id})`);
         } catch (error: any) {
-          const desc = `${combo.modelId} [${combo.platform}/${combo.device}]`;
+          const desc = `${combo.modelId} [${combo.platform}/${combo.device}/${combo.dtype}]`;
           failed.push({ combo: desc, error: error.message });
           console.log(`✗ Failed: ${desc} - ${error.message}`);
         }
