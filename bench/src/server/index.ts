@@ -62,14 +62,8 @@ queue.on("failed", async (benchmark) => {
     console.error(`✗ Failed to save failed benchmark ${benchmark.id}:`, error);
   }
 
-  // Also upload failed benchmarks to HF Dataset if enabled (for tracking failures)
-  if (hfUploader.isEnabled()) {
-    try {
-      await hfUploader.uploadResult(benchmark);
-    } catch (error) {
-      console.error(`✗ Failed to upload failed benchmark ${benchmark.id} to HF Dataset:`, error);
-    }
-  }
+  // Don't upload failed benchmarks to HF Dataset
+  // Only local storage keeps track of failures
 });
 
 // Log queue events
