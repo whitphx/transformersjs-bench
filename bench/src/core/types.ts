@@ -16,10 +16,15 @@ export interface BenchmarkResult {
   repeats: number;
   batchSize: number;
   dtype?: string;
-  metrics: {
+  metrics?: {
     load_ms: { p50: number; p90: number; raw: number[] };
     first_infer_ms: { p50: number; p90: number; raw: number[] };
     subsequent_infer_ms: { p50: number; p90: number; raw: number[] };
+  };
+  error?: {
+    type: string;
+    message: string;
+    stage?: "load" | "inference";
   };
   [key: string]: any;
 }

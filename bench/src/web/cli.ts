@@ -48,7 +48,12 @@ async function main() {
 
   // Build args based on mode
   const args = device === "wasm"
-    ? ["--disable-gpu", "--disable-software-rasterizer"]
+    ? [
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+        // Increase WASM memory limits for large models
+        "--js-flags=--max-old-space-size=8192",
+      ]
     : [
         // Official WebGPU flags from Chrome team
         // https://developer.chrome.com/blog/supercharge-web-ai-testing#enable-webgpu
@@ -94,6 +99,11 @@ async function main() {
       if (type === "error" || type === "warning") {
         console.log(`[browser ${type}]`, msg.text());
       }
+    });
+
+    // Catch page errors
+    page.on("pageerror", (error) => {
+      console.error(`[browser error]`, error.message);
     });
 
     // Navigate to the app
@@ -151,6 +161,21 @@ async function main() {
     }, { modelId, task, mode, repeats, device, dtype, batchSize });
 
     console.log("\n" + JSON.stringify(result, null, 2));
+
+    // Log helpful messages if there's an error
+    if (result.error) {
+      console.error("\n❌ Benchmark completed with error:");
+      console.error(`   Type: ${result.error.type}`);
+      console.error(`   Stage: ${result.error.stage}`);
+      console.error(`   Message: ${result.error.message}`);
+
+      if (result.error.type === "memory_error" && device === "wasm") {
+        console.error("\nSuggestions:");
+        console.error("  1. Try using --device=webgpu instead of --device=wasm");
+        console.error("  2. Use a smaller model variant");
+        console.error("  3. Reduce the batch size with --batch-size=1");
+      }
+    }
 
   } finally {
     await browser.close();

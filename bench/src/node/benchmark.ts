@@ -4,6 +4,7 @@ import path from "node:path";
 import { BenchmarkOptions, BenchmarkResult } from "../core/types.js";
 import { BenchmarkRawResult, aggregateMetrics } from "../core/metrics.js";
 import { ensureEmptyDir } from "./cache.js";
+import { getSystemInfo } from "../core/sysinfo.js";
 
 async function benchOnce(
   modelId: string,
@@ -79,6 +80,7 @@ export async function runNodeBenchmark(options: BenchmarkOptions): Promise<Bench
   }
 
   const metrics = aggregateMetrics(results);
+  const sysInfo = getSystemInfo();
 
   const result: BenchmarkResult = {
     platform: "node",
@@ -90,6 +92,7 @@ export async function runNodeBenchmark(options: BenchmarkOptions): Promise<Bench
     batchSize,
     cacheDir,
     metrics,
+    environment: sysInfo,
   };
 
   if (dtype) result.dtype = dtype;
