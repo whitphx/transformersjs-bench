@@ -8,6 +8,27 @@
  * 4. Are sortable and searchable
  */
 
+export interface EnvironmentInfo {
+  // Node.js format
+  cpu?: {
+    model?: string;
+    cores?: number;
+  };
+  memory?: {
+    total?: string;
+    deviceMemory?: number; // Web browser format (GB)
+  };
+  gpu?: {
+    vendor?: string;
+    renderer?: string;
+  };
+  platform?: string;
+  arch?: string;
+
+  // Web browser format (direct fields)
+  cpuCores?: number;
+}
+
 export interface BenchmarkSettings {
   platform: "node" | "web";
   modelId: string;
@@ -18,6 +39,7 @@ export interface BenchmarkSettings {
   batchSize?: number;
   browser?: string;
   headed?: boolean;
+  environment?: EnvironmentInfo;
 }
 
 /**
@@ -46,6 +68,17 @@ export function generateBenchmarkId(settings: BenchmarkSettings): string {
 
   // Combine: task/modelId/filename
   return `${task}/${modelId}/${filenameParts.join("_")}`;
+}
+
+/**
+ * Sanitize environment strings for use in filenames
+ */
+function sanitizeEnvString(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9\-]/g, "")
+    .substring(0, 20); // Limit length
 }
 
 /**
@@ -86,6 +119,52 @@ function generateFilenameParts(settings: BenchmarkSettings): string[] {
   // 7. Headed mode (for web platform, only if true)
   if (settings.platform === "web" && settings.headed) {
     parts.push("headed");
+  }
+
+  // 8. Environment info (CPU, memory, architecture, GPU)
+  if (settings.environment) {
+    const env = settings.environment;
+
+    // CPU model (sanitized, first significant part) - Node.js only
+    if (env.cpu?.model) {
+      const cpuName = sanitizeEnvString(env.cpu.model.split(/[\s(]/)[0]);
+      if (cpuName) {
+        parts.push(cpuName);
+      }
+    }
+
+    // CPU cores (support both Node.js and web browser formats)
+    const cores = env.cpu?.cores || env.cpuCores;
+    if (cores) {
+      parts.push(`${cores}c`);
+    }
+
+    // Memory (support both Node.js and web browser formats)
+    if (env.memory?.total) {
+      // Node.js format: Parse memory string like "32.00 GB" -> "32gb"
+      const memMatch = env.memory.total.match(/^(\d+)/);
+      if (memMatch) {
+        parts.push(`${memMatch[1]}gb`);
+      }
+    } else if (env.memory?.deviceMemory) {
+      // Web browser format: deviceMemory is already in GB
+      parts.push(`${env.memory.deviceMemory}gb`);
+    }
+
+    // Architecture (Node.js only, browser uses platform like "MacIntel")
+    if (env.arch) {
+      parts.push(env.arch);
+    }
+
+    // GPU vendor/renderer for web (if using webgpu)
+    if (settings.platform === "web" && settings.device === "webgpu" && env.gpu) {
+      if (env.gpu.vendor) {
+        const gpuVendor = sanitizeEnvString(env.gpu.vendor.split(/[\s(]/)[0]);
+        if (gpuVendor && gpuVendor !== "google") { // Skip "Google Inc."
+          parts.push(`gpu-${gpuVendor}`);
+        }
+      }
+    }
   }
 
   return parts;

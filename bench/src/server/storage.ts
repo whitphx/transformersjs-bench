@@ -26,6 +26,14 @@ export class BenchmarkStorage {
       batchSize: benchmark.batchSize,
       browser: benchmark.browser,
       headed: benchmark.headed,
+      environment: benchmark.result?.environment ? {
+        cpu: benchmark.result.environment.cpu,
+        memory: benchmark.result.environment.memory,
+        gpu: benchmark.result.environment.gpu,
+        platform: benchmark.result.environment.platform,
+        arch: benchmark.result.environment.arch,
+        cpuCores: benchmark.result.environment.cpuCores, // Web browser format
+      } : undefined,
     };
 
     const { dir, filename } = generateBenchmarkPath(settings);

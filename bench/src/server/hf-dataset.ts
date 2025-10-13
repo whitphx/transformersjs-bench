@@ -46,11 +46,68 @@ export class HFDatasetUploader {
       batchSize: benchmark.batchSize,
       browser: benchmark.browser,
       headed: benchmark.headed,
+      environment: benchmark.result?.environment ? {
+        cpu: benchmark.result.environment.cpu,
+        memory: benchmark.result.environment.memory,
+        gpu: benchmark.result.environment.gpu,
+        platform: benchmark.result.environment.platform,
+        arch: benchmark.result.environment.arch,
+        cpuCores: benchmark.result.environment.cpuCores, // Web browser format
+      } : undefined,
     };
 
     const { fullPath } = generateBenchmarkPath(settings);
     // Replace .jsonl extension with .json
     return fullPath.replace(/\.jsonl$/, ".json");
+  }
+
+  /**
+   * Transform benchmark data for HF Dataset upload
+   * Lifts frequently-accessed fields to top level for easier browsing
+   */
+  private transformForUpload(benchmark: QueuedBenchmark): any {
+    const result = benchmark.result || {};
+
+    return {
+      // Top-level metadata
+      id: benchmark.id,
+      status: benchmark.status,
+      timestamp: benchmark.timestamp,
+      startedAt: benchmark.startedAt,
+      completedAt: benchmark.completedAt,
+
+      // Configuration (lifted to top level)
+      platform: benchmark.platform,
+      modelId: benchmark.modelId,
+      task: benchmark.task,
+      mode: benchmark.mode,
+      device: benchmark.device,
+      dtype: benchmark.dtype,
+      batchSize: benchmark.batchSize,
+      repeats: benchmark.repeats,
+
+      // Browser-specific (only if web platform)
+      ...(benchmark.platform === "web" && {
+        browser: benchmark.browser,
+        headed: benchmark.headed,
+      }),
+
+      // Runtime info (lifted from result)
+      runtime: result.runtime,
+
+      // Metrics (lifted to top level for easy access)
+      metrics: result.metrics,
+
+      // Environment (lifted to top level for easy access)
+      environment: result.environment,
+
+      // Error info (if present)
+      ...(result.error && { error: result.error }),
+
+      // Additional metadata
+      ...(result.cacheDir && { cacheDir: result.cacheDir }),
+      ...(result.notes && { notes: result.notes }),
+    };
   }
 
   /**
@@ -64,8 +121,9 @@ export class HFDatasetUploader {
 
     const filePath = this.getHFFilePath(benchmark);
 
-    // Convert benchmark to JSON string
-    const content = JSON.stringify(benchmark, null, 2);
+    // Transform and convert benchmark to JSON string
+    const transformed = this.transformForUpload(benchmark);
+    const content = JSON.stringify(transformed, null, 2);
     const blob = new Blob([content], { type: "application/json" });
 
     try {
