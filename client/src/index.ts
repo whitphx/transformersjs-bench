@@ -3,6 +3,9 @@
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { table } from "table";
+import prompts from "prompts";
+import { searchModels, formatModel } from "./hf-api.js";
+import type { ModelEntry } from "@huggingface/hub";
 
 const SERVER_URL = process.env.BENCH_SERVER_URL || "http://localhost:7860";
 
@@ -261,6 +264,185 @@ yargs(hideBin(process.argv))
         result.queue.forEach((b: any) => {
           console.log(`  [${b.status}] ${b.id} - ${b.platform}/${b.modelId}`);
         });
+      }
+    }
+  )
+  .command(
+    "batch <task> [query]",
+    "Search HuggingFace models and submit benchmarks for them",
+    (yargs) => {
+      return yargs
+        .positional("task", {
+          describe: "Task type (e.g., feature-extraction, text-classification, fill-mask)",
+          type: "string",
+          demandOption: true,
+        })
+        .positional("query", {
+          describe: "Optional search query to filter model names",
+          type: "string",
+        })
+        .option("limit", {
+          describe: "Maximum number of models to benchmark",
+          type: "number",
+        })
+        .option("sort", {
+          describe: "Sort models by",
+          choices: ["downloads", "likes", "lastModified", "trending"] as const,
+          default: "downloads" as const,
+        })
+        .option("platform", {
+          describe: "Platform(s) to run on (can specify multiple)",
+          type: "array",
+          default: ["node"],
+        })
+        .option("mode", {
+          describe: "Cache mode(s) (can specify multiple)",
+          type: "array",
+          default: ["warm"],
+        })
+        .option("repeats", {
+          describe: "Number of times to repeat the benchmark",
+          type: "number",
+          default: 3,
+        })
+        .option("batch-size", {
+          describe: "Batch size(s) for inference (can specify multiple)",
+          type: "array",
+          default: [1],
+        })
+        .option("device", {
+          describe: "Device(s) for platform (can specify multiple)",
+          type: "array",
+          default: ["webgpu"],
+        })
+        .option("browser", {
+          describe: "Browser(s) for web platform (can specify multiple)",
+          type: "array",
+          default: ["chromium"],
+        })
+        .option("yes", {
+          alias: "y",
+          describe: "Skip confirmation prompt",
+          type: "boolean",
+          default: false,
+        });
+    },
+    async (argv) => {
+      console.log(`Searching for ${argv.task} models${argv.query ? ` matching "${argv.query}"` : ""}...\n`);
+
+      const models = await searchModels({
+        task: argv.task,
+        search: argv.query,
+        limit: argv.limit,
+        sort: argv.sort,
+      });
+
+      if (models.length === 0) {
+        console.log("No models found.");
+        return;
+      }
+
+      console.log(`Found ${models.length} models:\n`);
+      models.forEach((model, index) => {
+        console.log(`${index + 1}. ${formatModel(model)}`);
+      });
+
+      // Generate all combinations
+      const platforms = argv.platform as string[];
+      const modes = argv.mode as string[];
+      const batchSizes = argv.batchSize as number[];
+      const devices = argv.device as string[];
+      const browsers = argv.browser as string[];
+
+      const combinations: Array<{
+        modelId: string;
+        platform: string;
+        mode: string;
+        batchSize: number;
+        device: string;
+        browser: string;
+      }> = [];
+
+      for (const model of models) {
+        for (const platform of platforms) {
+          for (const mode of modes) {
+            for (const batchSize of batchSizes) {
+              for (const device of devices) {
+                for (const browser of browsers) {
+                  combinations.push({
+                    modelId: (model as any).name || model.id,
+                    platform,
+                    mode,
+                    batchSize,
+                    device,
+                    browser,
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      console.log(`\n📊 Benchmark Plan:`);
+      console.log(`  Models: ${models.length}`);
+      console.log(`  Platforms: ${platforms.join(", ")}`);
+      console.log(`  Modes: ${modes.join(", ")}`);
+      console.log(`  Batch Sizes: ${batchSizes.join(", ")}`);
+      console.log(`  Devices: ${devices.join(", ")}`);
+      console.log(`  Browsers: ${browsers.join(", ")}`);
+      console.log(`  Total benchmarks: ${combinations.length}`);
+
+      // Ask for confirmation unless -y flag is used
+      if (!argv.yes) {
+        const response = await prompts({
+          type: "confirm",
+          name: "proceed",
+          message: `Proceed with submitting ${combinations.length} benchmark(s)?`,
+          initial: true,
+        });
+
+        if (!response.proceed) {
+          console.log("\nCancelled.");
+          return;
+        }
+      }
+
+      console.log(`\nSubmitting ${combinations.length} benchmarks...`);
+
+      const submitted: string[] = [];
+      const failed: Array<{ combo: string; error: string }> = [];
+
+      for (const combo of combinations) {
+        try {
+          const options: SubmitOptions = {
+            modelId: combo.modelId,
+            task: argv.task,
+            platform: combo.platform as "node" | "web",
+            mode: combo.mode as "warm" | "cold",
+            repeats: argv.repeats,
+            batchSize: combo.batchSize,
+            device: combo.device,
+            browser: combo.browser as "chromium" | "firefox" | "webkit",
+          };
+
+          const result = await submitBenchmark(options);
+          const desc = `${combo.modelId} [${combo.platform}/${combo.device}/${combo.mode}/b${combo.batchSize}]`;
+          submitted.push(desc);
+          console.log(`✓ Queued: ${desc} (${result.id})`);
+        } catch (error: any) {
+          const desc = `${combo.modelId} [${combo.platform}/${combo.device}]`;
+          failed.push({ combo: desc, error: error.message });
+          console.log(`✗ Failed: ${desc} - ${error.message}`);
+        }
+      }
+
+      console.log(`\n📊 Summary:`);
+      console.log(`  ✓ Submitted: ${submitted.length}`);
+      console.log(`  ✗ Failed: ${failed.length}`);
+
+      if (submitted.length > 0) {
+        console.log(`\nCheck status with: bench-client queue`);
       }
     }
   )

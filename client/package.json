@@ -7,6 +7,10 @@
     "cli": "tsx src/index.ts"
   },
   "dependencies": {
+    "@huggingface/hub": "^2.6.12",
+    "@types/prompts": "^2.4.9",
+    "dotenv": "^17.2.3",
+    "prompts": "^2.4.2",
     "table": "^6.9.0",
     "yargs": "^17.7.2"
   },
