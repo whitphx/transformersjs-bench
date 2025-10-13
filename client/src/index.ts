@@ -5,6 +5,7 @@ import { hideBin } from "yargs/helpers";
 import { table } from "table";
 import prompts from "prompts";
 import { searchModels, formatModel } from "./hf-api.js";
+import { PIPELINE_DATA } from "@huggingface/tasks";
 import type { ModelEntry } from "@huggingface/hub";
 
 const SERVER_URL = process.env.BENCH_SERVER_URL || "http://localhost:7860";
@@ -101,7 +102,7 @@ yargs(hideBin(process.argv))
         })
         .positional("task", {
           describe: "Task to perform (e.g., feature-extraction, fill-mask)",
-          type: "string",
+          choices: Object.keys(PIPELINE_DATA),
           demandOption: true,
         })
         .option("platform", {
@@ -274,7 +275,7 @@ yargs(hideBin(process.argv))
       return yargs
         .positional("task", {
           describe: "Task type (e.g., feature-extraction, text-classification, fill-mask)",
-          type: "string",
+          choices: Object.keys(PIPELINE_DATA),
           demandOption: true,
         })
         .positional("query", {
@@ -284,11 +285,6 @@ yargs(hideBin(process.argv))
         .option("limit", {
           describe: "Maximum number of models to benchmark",
           type: "number",
-        })
-        .option("sort", {
-          describe: "Sort models by",
-          choices: ["downloads", "likes", "lastModified", "trending"] as const,
-          default: "downloads" as const,
         })
         .option("platform", {
           describe: "Platform(s) to run on (can specify multiple)",
@@ -336,10 +332,9 @@ yargs(hideBin(process.argv))
       console.log(`Searching for ${argv.task} models${argv.query ? ` matching "${argv.query}"` : ""}...\n`);
 
       const models = await searchModels({
-        task: argv.task,
+        task: argv.task as keyof typeof PIPELINE_DATA,
         search: argv.query,
         limit: argv.limit,
-        sort: argv.sort,
       });
 
       if (models.length === 0) {
