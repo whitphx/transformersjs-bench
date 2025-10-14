@@ -7,6 +7,8 @@ from typing import List, Dict, Any, Optional
 import pandas as pd
 from huggingface_hub import HfApi, hf_hub_download
 
+from .formatters import apply_formatting
+
 
 def load_benchmark_data(
     dataset_repo: str,
@@ -50,7 +52,9 @@ def load_benchmark_data(
                     token=token,
                 )
                 if result:
-                    all_results.append(flatten_result(result))
+                    flattened = flatten_result(result)
+                    formatted = apply_formatting(flattened)
+                    all_results.append(formatted)
             except Exception as e:
                 print(f"Error loading {file_path}: {e}")
                 continue
