@@ -166,24 +166,22 @@ def format_cpu_cores(cores: Optional[int]) -> str:
     return f"{emoji} {cores} cores"
 
 
-def format_timestamp(timestamp: Optional[int]) -> str:
+def format_timestamp(timestamp: Optional[datetime]) -> str:
     """Format timestamp as datetime string.
 
     Args:
-        timestamp: Unix timestamp in milliseconds
+        timestamp: datetime object
 
     Returns:
         Formatted datetime string
     """
-    if timestamp is None or timestamp == 0:
+    if timestamp is None:
         return "-"
 
     try:
-        # Convert from milliseconds to seconds
-        dt = datetime.fromtimestamp(timestamp / 1000)
         # Format as readable datetime
-        return dt.strftime("%Y-%m-%d %H:%M:%S")
-    except (ValueError, OSError):
+        return timestamp.strftime("%Y-%m-%d %H:%M:%S")
+    except (ValueError, AttributeError):
         return str(timestamp)
 
 

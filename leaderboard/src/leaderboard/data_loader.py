@@ -4,6 +4,7 @@ Data loader module for loading benchmark results from HuggingFace Dataset.
 
 import json
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 import pandas as pd
 from huggingface_hub import HfApi, hf_hub_download
 
@@ -118,6 +119,15 @@ def flatten_result(result: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Flattened dictionary with extracted fields
     """
+    # Convert timestamp from milliseconds to datetime
+    timestamp_ms = result.get("timestamp", 0)
+    timestamp_dt = None
+    if timestamp_ms:
+        try:
+            timestamp_dt = datetime.fromtimestamp(timestamp_ms / 1000)
+        except (ValueError, OSError):
+            timestamp_dt = None
+
     flat = {
         "id": result.get("id", ""),
         "platform": result.get("platform", ""),
@@ -131,7 +141,7 @@ def flatten_result(result: Dict[str, Any]) -> Dict[str, Any]:
         "dtype": result.get("dtype", ""),
         "headed": result.get("headed", False),
         "status": result.get("status", ""),
-        "timestamp": result.get("timestamp", 0),
+        "timestamp": timestamp_dt,
         "runtime": result.get("runtime", ""),
     }
 
