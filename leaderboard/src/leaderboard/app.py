@@ -13,6 +13,7 @@ from leaderboard.data_loader import (
     load_benchmark_data,
     get_unique_values,
 )
+from leaderboard.formatters import apply_formatting
 
 # Load environment variables
 load_dotenv()
@@ -23,10 +24,17 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 def load_data() -> pd.DataFrame:
     """Load benchmark data from configured HF Dataset repository."""
-    return load_benchmark_data(
+    # Load raw data
+    df = load_benchmark_data(
         dataset_repo=HF_DATASET_REPO,
         token=HF_TOKEN,
     )
+
+    # Apply formatting to each row
+    if not df.empty:
+        df = df.apply(lambda row: pd.Series(apply_formatting(row.to_dict())), axis=1)
+
+    return df
 
 
 def filter_data(
