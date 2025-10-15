@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from leaderboard.data_loader import (
     load_benchmark_data,
     get_unique_values,
+    get_first_timer_friendly_models,
 )
 from leaderboard.formatters import apply_formatting
 
@@ -37,11 +38,15 @@ def load_data() -> pd.DataFrame:
         token=HF_TOKEN,
     )
 
-    # Apply formatting to each row
-    if not df.empty:
-        df = df.apply(lambda row: pd.Series(apply_formatting(row.to_dict())), axis=1)
-
     return df
+
+
+def format_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Apply formatting to dataframe for display."""
+    if df.empty:
+        return df
+
+    return df.apply(lambda row: pd.Series(apply_formatting(row.to_dict())), axis=1)
 
 
 def filter_data(
@@ -93,6 +98,7 @@ def create_leaderboard_ui():
 
     # Load initial data
     df = load_data()
+    formatted_df = format_dataframe(df)
 
     with gr.Blocks(title="Transformers.js Benchmark Leaderboard") as demo:
         gr.Markdown("# 🏆 Transformers.js Benchmark Leaderboard")
@@ -104,6 +110,24 @@ def create_leaderboard_ui():
             gr.Markdown(
                 "⚠️ **HF_DATASET_REPO not configured.** "
                 "Please set the environment variable to load benchmark data."
+            )
+
+        # First-timer-friendly models section
+        with gr.Accordion("✨ First-Timer-Friendly Models", open=True):
+            gr.Markdown(
+                "These models are great for first-timers! They're popular, fast to load, "
+                "and quick to run. Perfect for getting started with Transformers.js.\n\n"
+                "**Showing top 3 models per task type.**"
+            )
+
+            first_timer_models = get_first_timer_friendly_models(df, limit_per_task=3)
+            formatted_first_timer = format_dataframe(first_timer_models)
+
+            first_timer_table = gr.DataFrame(
+                value=formatted_first_timer,
+                label="Top First-Timer-Friendly Models (by Task)",
+                interactive=False,
+                wrap=True,
             )
 
         with gr.Row():
@@ -145,8 +169,8 @@ def create_leaderboard_ui():
             )
 
         results_table = gr.DataFrame(
-            value=df,
-            label="Benchmark Results",
+            value=formatted_df,
+            label="All Benchmark Results",
             interactive=False,
             wrap=True,
         )
@@ -166,8 +190,15 @@ def create_leaderboard_ui():
         def update_data():
             """Reload data from HuggingFace."""
             new_df = load_data()
+            formatted_new_df = format_dataframe(new_df)
+
+            # Update first-timer-friendly models (3 per task)
+            new_first_timer = get_first_timer_friendly_models(new_df, limit_per_task=3)
+            formatted_new_first_timer = format_dataframe(new_first_timer)
+
             return (
-                new_df,
+                formatted_new_first_timer,
+                formatted_new_df,
                 gr.update(choices=get_unique_values(new_df, "task")),
                 gr.update(choices=get_unique_values(new_df, "platform")),
                 gr.update(choices=get_unique_values(new_df, "device")),
@@ -175,14 +206,18 @@ def create_leaderboard_ui():
                 gr.update(choices=get_unique_values(new_df, "dtype")),
             )
 
-        def apply_filters(df, model, task, platform, device, mode, dtype):
+        def apply_filters(formatted_df, model, task, platform, device, mode, dtype):
             """Apply filters and return filtered DataFrame."""
-            return filter_data(df, model, task, platform, device, mode, dtype)
+            # Need to reload raw data to filter, then format
+            raw_df = load_data()
+            filtered = filter_data(raw_df, model, task, platform, device, mode, dtype)
+            return format_dataframe(filtered)
 
         # Refresh button updates data and resets filters
         refresh_btn.click(
             fn=update_data,
             outputs=[
+                first_timer_table,
                 results_table,
                 task_filter,
                 platform_filter,

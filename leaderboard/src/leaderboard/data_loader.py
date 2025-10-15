@@ -226,6 +226,109 @@ def enrich_with_hf_metadata(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def get_first_timer_friendly_models(df: pd.DataFrame, limit_per_task: int = 3) -> pd.DataFrame:
+    """Identify first-timer-friendly models based on popularity and performance, grouped by task.
+
+    A model is considered first-timer-friendly if it:
+    - Has high downloads (popular)
+    - Has fast load times (easy to start)
+    - Has fast inference times (quick results)
+    - Successfully completed benchmarks
+
+    Args:
+        df: DataFrame containing benchmark results
+        limit_per_task: Maximum number of models to return per task
+
+    Returns:
+        DataFrame with top first-timer-friendly models per task
+    """
+    if df.empty:
+        return pd.DataFrame()
+
+    # Filter only successful benchmarks
+    filtered = df[df["status"] == "completed"].copy() if "status" in df.columns else df.copy()
+
+    if filtered.empty:
+        return pd.DataFrame()
+
+    # Check if task column exists
+    if "task" not in filtered.columns:
+        logger.warning("Task column not found in dataframe")
+        return pd.DataFrame()
+
+    # Calculate first-timer-friendliness score per task
+    all_results = []
+
+    for task in filtered["task"].unique():
+        task_df = filtered[filtered["task"] == task].copy()
+
+        if task_df.empty:
+            continue
+
+        # Normalize metrics within this task (lower is better for times, higher is better for popularity)
+
+        # Downloads score (0-1, higher is better)
+        if "downloads" in task_df.columns:
+            max_downloads = task_df["downloads"].max()
+            task_df["downloads_score"] = task_df["downloads"] / max_downloads if max_downloads > 0 else 0
+        else:
+            task_df["downloads_score"] = 0
+
+        # Likes score (0-1, higher is better)
+        if "likes" in task_df.columns:
+            max_likes = task_df["likes"].max()
+            task_df["likes_score"] = task_df["likes"] / max_likes if max_likes > 0 else 0
+        else:
+            task_df["likes_score"] = 0
+
+        # Load time score (0-1, lower time is better)
+        if "load_ms_p50" in task_df.columns:
+            max_load = task_df["load_ms_p50"].max()
+            task_df["load_score"] = 1 - (task_df["load_ms_p50"] / max_load) if max_load > 0 else 0
+        else:
+            task_df["load_score"] = 0
+
+        # Inference time score (0-1, lower time is better)
+        if "first_infer_ms_p50" in task_df.columns:
+            max_infer = task_df["first_infer_ms_p50"].max()
+            task_df["infer_score"] = 1 - (task_df["first_infer_ms_p50"] / max_infer) if max_infer > 0 else 0
+        else:
+            task_df["infer_score"] = 0
+
+        # Calculate weighted first-timer-friendliness score
+        # Weights: popularity (40%), load time (30%), inference time (30%)
+        task_df["first_timer_score"] = (
+            (task_df["downloads_score"] * 0.25) +
+            (task_df["likes_score"] * 0.15) +
+            (task_df["load_score"] * 0.30) +
+            (task_df["infer_score"] * 0.30)
+        )
+
+        # Group by model and take best score for each model within this task
+        best_per_model = task_df.loc[task_df.groupby("modelId")["first_timer_score"].idxmax()]
+
+        # Sort by first-timer score and take top N for this task
+        top_for_task = best_per_model.sort_values("first_timer_score", ascending=False).head(limit_per_task)
+
+        # Drop intermediate scoring columns
+        score_cols = ["downloads_score", "likes_score", "load_score", "infer_score", "first_timer_score"]
+        top_for_task = top_for_task.drop(columns=[col for col in score_cols if col in top_for_task.columns])
+
+        all_results.append(top_for_task)
+
+    if not all_results:
+        return pd.DataFrame()
+
+    # Combine all results
+    result = pd.concat(all_results, ignore_index=True)
+
+    # Sort by task name for better organization
+    if "task" in result.columns:
+        result = result.sort_values("task")
+
+    return result
+
+
 def get_unique_values(df: pd.DataFrame, column: str) -> List[str]:
     """Get unique values from a column for dropdown choices.
 
