@@ -4,8 +4,22 @@ import { getArg } from "../core/args.js";
 
 // CLI for running browser benchmarks headlessly via Playwright
 
-const modelId = process.argv[2] || "Xenova/distilbert-base-uncased";
-const task = process.argv[3] || "feature-extraction";
+const modelId = process.argv[2];
+const task = process.argv[3];
+
+if (!modelId) {
+  console.error("Error: modelId is required");
+  console.error("Usage: tsx src/web/cli.ts <modelId> <task> [options]");
+  console.error("Example: tsx src/web/cli.ts Xenova/distilbert-base-uncased feature-extraction");
+  process.exit(1);
+}
+
+if (!task) {
+  console.error("Error: task is required");
+  console.error("Usage: tsx src/web/cli.ts <modelId> <task> [options]");
+  console.error("Example: tsx src/web/cli.ts Xenova/distilbert-base-uncased feature-extraction");
+  process.exit(1);
+}
 
 const mode = getArg("mode", "warm") as "warm" | "cold";
 const repeats = Math.max(1, parseInt(getArg("repeats", "3") || "3", 10));

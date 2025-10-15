@@ -13,8 +13,25 @@ export function getArg(name: string, def?: string): string | undefined {
 }
 
 export function parseArgs() {
-  const modelId = process.argv[2] || "Xenova/distilbert-base-uncased";
-  const task = process.argv[3] || "feature-extraction";
+  const modelId = process.argv[2];
+  const task = process.argv[3];
+
+  if (!modelId) {
+    throw new Error(
+      "modelId is required\n" +
+      "Usage: tsx src/node/index.ts <modelId> <task> [options]\n" +
+      "Example: tsx src/node/index.ts Xenova/distilbert-base-uncased feature-extraction"
+    );
+  }
+
+  if (!task) {
+    throw new Error(
+      "task is required\n" +
+      "Usage: tsx src/node/index.ts <modelId> <task> [options]\n" +
+      "Example: tsx src/node/index.ts Xenova/distilbert-base-uncased feature-extraction"
+    );
+  }
+
   const mode = (getArg("mode", "warm") as "warm" | "cold");
   const repeats = Math.max(1, parseInt(getArg("repeats", "3") || "3", 10));
   const dtype = getArg("dtype"); // optional: fp32, fp16, q8, q4, etc.
