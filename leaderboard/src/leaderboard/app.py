@@ -5,6 +5,7 @@ A Gradio app that displays benchmark results from a HuggingFace Dataset reposito
 """
 
 import os
+import logging
 import pandas as pd
 import gradio as gr
 from dotenv import load_dotenv
@@ -14,6 +15,12 @@ from leaderboard.data_loader import (
     get_unique_values,
 )
 from leaderboard.formatters import apply_formatting
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 # Load environment variables
 load_dotenv()

@@ -3,10 +3,13 @@ Data loader module for loading benchmark results from HuggingFace Dataset.
 """
 
 import json
+import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import pandas as pd
 from huggingface_hub import HfApi, hf_hub_download, list_models
+
+logger = logging.getLogger(__name__)
 
 
 def load_benchmark_data(
@@ -54,7 +57,7 @@ def load_benchmark_data(
                     flattened = flatten_result(result)
                     all_results.append(flattened)
             except Exception as e:
-                print(f"Error loading {file_path}: {e}")
+                logger.error(f"Error loading {file_path}: {e}")
                 continue
 
         if not all_results:
@@ -73,7 +76,7 @@ def load_benchmark_data(
         return df
 
     except Exception as e:
-        print(f"Error loading benchmark data: {e}")
+        logger.error(f"Error loading benchmark data: {e}")
         return pd.DataFrame()
 
 
@@ -106,7 +109,7 @@ def load_single_benchmark_file(
             return json.load(f)
 
     except Exception as e:
-        print(f"Error loading file {file_path}: {e}")
+        logger.error(f"Error loading file {file_path}: {e}")
         return None
 
 
@@ -199,7 +202,7 @@ def enrich_with_hf_metadata(df: pd.DataFrame) -> pd.DataFrame:
 
     # Fetch metadata for all models
     model_metadata = {}
-    print(f"Fetching metadata for {len(model_ids)} models from HuggingFace...")
+    logger.info(f"Fetching metadata for {len(model_ids)} models from HuggingFace...")
 
     try:
         for model in list_models(filter=["transformers.js"]):
@@ -214,7 +217,7 @@ def enrich_with_hf_metadata(df: pd.DataFrame) -> pd.DataFrame:
                     break
 
     except Exception as e:
-        print(f"Error fetching HuggingFace metadata: {e}")
+        logger.error(f"Error fetching HuggingFace metadata: {e}")
 
     # Add metadata to dataframe
     df["downloads"] = df["modelId"].map(lambda x: model_metadata.get(x, {}).get("downloads", 0))
