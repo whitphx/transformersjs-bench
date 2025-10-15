@@ -6,7 +6,7 @@ import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import pandas as pd
-from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub import HfApi, hf_hub_download, list_models
 
 
 def load_benchmark_data(
@@ -62,6 +62,9 @@ def load_benchmark_data(
 
         # Convert to DataFrame
         df = pd.DataFrame(all_results)
+
+        # Enrich with HuggingFace model metadata
+        df = enrich_with_hf_metadata(df)
 
         # Sort by model name and timestamp
         if "modelId" in df.columns and "timestamp" in df.columns:
@@ -176,6 +179,48 @@ def flatten_result(result: Dict[str, Any]) -> Dict[str, Any]:
         flat["duration_s"] = (result["completedAt"] - result["startedAt"]) / 1000
 
     return flat
+
+
+def enrich_with_hf_metadata(df: pd.DataFrame) -> pd.DataFrame:
+    """Enrich benchmark data with HuggingFace model metadata (downloads, likes).
+
+    Args:
+        df: DataFrame containing benchmark results
+        token: HuggingFace API token (optional)
+
+    Returns:
+        DataFrame with added downloads and likes columns
+    """
+    if df.empty or "modelId" not in df.columns:
+        return df
+
+    # Get unique model IDs
+    model_ids = df["modelId"].unique().tolist()
+
+    # Fetch metadata for all models
+    model_metadata = {}
+    print(f"Fetching metadata for {len(model_ids)} models from HuggingFace...")
+
+    try:
+        for model in list_models(filter=["transformers.js"]):
+            if model.id in model_ids:
+                model_metadata[model.id] = {
+                    "downloads": model.downloads or 0,
+                    "likes": model.likes or 0,
+                }
+
+                # Break early if we have all models
+                if len(model_metadata) == len(model_ids):
+                    break
+
+    except Exception as e:
+        print(f"Error fetching HuggingFace metadata: {e}")
+
+    # Add metadata to dataframe
+    df["downloads"] = df["modelId"].map(lambda x: model_metadata.get(x, {}).get("downloads", 0))
+    df["likes"] = df["modelId"].map(lambda x: model_metadata.get(x, {}).get("likes", 0))
+
+    return df
 
 
 def get_unique_values(df: pd.DataFrame, column: str) -> List[str]:

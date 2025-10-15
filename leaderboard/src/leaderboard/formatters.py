@@ -185,6 +185,65 @@ def format_timestamp(timestamp: Optional[datetime]) -> str:
         return str(timestamp)
 
 
+def format_downloads(downloads: Optional[int]) -> str:
+    """Format downloads count with emoji.
+
+    Args:
+        downloads: Number of downloads
+
+    Returns:
+        Formatted string with emoji
+    """
+    if downloads is None or downloads == 0:
+        return "-"
+
+    # Format large numbers
+    if downloads >= 1_000_000:
+        formatted = f"{downloads / 1_000_000:.1f}M"
+        emoji = "🔥"  # Very popular
+    elif downloads >= 100_000:
+        formatted = f"{downloads / 1_000:.0f}k"
+        emoji = "⭐"  # Popular
+    elif downloads >= 10_000:
+        formatted = f"{downloads / 1_000:.1f}k"
+        emoji = "✨"  # Well-known
+    elif downloads >= 1_000:
+        formatted = f"{downloads / 1_000:.1f}k"
+        emoji = "📊"  # Moderate
+    else:
+        formatted = str(downloads)
+        emoji = "📈"  # New/niche
+
+    return f"{emoji} {formatted}"
+
+
+def format_likes(likes: Optional[int]) -> str:
+    """Format likes count with emoji.
+
+    Args:
+        likes: Number of likes
+
+    Returns:
+        Formatted string with emoji
+    """
+    if likes is None or likes == 0:
+        return "-"
+
+    # Format based on popularity
+    if likes >= 1000:
+        emoji = "💖"  # Very popular
+    elif likes >= 100:
+        emoji = "❤️"  # Popular
+    elif likes >= 50:
+        emoji = "💙"  # Well-liked
+    elif likes >= 10:
+        emoji = "💚"  # Moderate
+    else:
+        emoji = "🤍"  # Few likes
+
+    return f"{emoji} {likes}"
+
+
 def apply_formatting(df_dict: dict) -> dict:
     """Apply emoji formatting to a benchmark result dictionary.
 
@@ -247,5 +306,12 @@ def apply_formatting(df_dict: dict) -> dict:
     # Format timestamp
     if "timestamp" in formatted:
         formatted["timestamp"] = format_timestamp(formatted["timestamp"])
+
+    # Format HuggingFace metadata
+    if "downloads" in formatted:
+        formatted["downloads"] = format_downloads(formatted["downloads"])
+
+    if "likes" in formatted:
+        formatted["likes"] = format_likes(formatted["likes"])
 
     return formatted

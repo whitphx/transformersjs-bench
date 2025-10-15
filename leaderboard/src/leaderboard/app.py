@@ -146,10 +146,14 @@ def create_leaderboard_ui():
 
         gr.Markdown("### 📊 Metrics")
         gr.Markdown(
+            "**Benchmark Metrics:**\n"
             "- **load_ms**: Model loading time in milliseconds\n"
             "- **first_infer_ms**: First inference time in milliseconds\n"
             "- **subsequent_infer_ms**: Subsequent inference time in milliseconds\n"
-            "- **p50/p90**: 50th and 90th percentile values"
+            "- **p50/p90**: 50th and 90th percentile values\n\n"
+            "**HuggingFace Metrics:**\n"
+            "- **downloads**: Total downloads from HuggingFace Hub\n"
+            "- **likes**: Number of likes on HuggingFace Hub"
         )
 
         def update_data():
