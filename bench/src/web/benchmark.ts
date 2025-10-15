@@ -3,6 +3,7 @@ import { BenchmarkRawResult, aggregateMetrics } from "../core/metrics.js";
 import { BenchmarkResult } from "../core/types.js";
 import { clearCaches } from "./cache.js";
 import { getBrowserEnvInfo } from "./envinfo.js";
+import { getTaskInput } from "../core/task-inputs.js";
 
 function now() {
   return performance.now();
@@ -22,18 +23,18 @@ async function benchOnce(
     const pipe = await pipeline(task, modelId, options);
     const t1 = now();
 
-    // Prepare batch input
-    const inputs = Array(batchSize).fill("The quick brown fox jumps over the lazy dog.");
+    // Get task-appropriate input
+    const { inputs, options: taskOptions } = getTaskInput(task, batchSize);
 
     const t2 = now();
-    await pipe(inputs);
+    await pipe(inputs, taskOptions);
     const t3 = now();
 
     // Run additional inferences to measure subsequent performance
     const subsequentTimes: number[] = [];
     for (let i = 0; i < 3; i++) {
       const t4 = now();
-      await pipe(inputs);
+      await pipe(inputs, taskOptions);
       const t5 = now();
       subsequentTimes.push(+(t5 - t4).toFixed(1));
     }
@@ -128,8 +129,8 @@ export async function runWebBenchmarkWarm(
     const options: any = { device };
     if (dtype) options.dtype = dtype;
     const p = await pipeline(task, modelId, options);
-    const warmupInputs = Array(batchSize).fill("warmup");
-    await p(warmupInputs);
+    const { inputs: warmupInputs, options: taskOptions } = getTaskInput(task, batchSize);
+    await p(warmupInputs, taskOptions);
   } catch (err: any) {
     const errorMessage = err?.message || String(err);
     let errorType = "runtime_error";

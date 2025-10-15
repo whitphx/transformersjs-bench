@@ -5,6 +5,7 @@ import { BenchmarkOptions, BenchmarkResult } from "../core/types.js";
 import { BenchmarkRawResult, aggregateMetrics } from "../core/metrics.js";
 import { ensureEmptyDir } from "./cache.js";
 import { getSystemInfo } from "../core/sysinfo.js";
+import { getTaskInput } from "../core/task-inputs.js";
 
 async function benchOnce(
   modelId: string,
@@ -18,18 +19,18 @@ async function benchOnce(
   const pipe = await pipeline(task, modelId, options);
   const t1 = performance.now();
 
-  // Prepare batch input
-  const inputs = Array(batchSize).fill("The quick brown fox jumps over the lazy dog.");
+  // Get task-appropriate input
+  const { inputs, options: taskOptions } = getTaskInput(task, batchSize);
 
   const t2 = performance.now();
-  await pipe(inputs);
+  await pipe(inputs, taskOptions);
   const t3 = performance.now();
 
   // Run additional inferences to measure subsequent performance
   const subsequentTimes: number[] = [];
   for (let i = 0; i < 3; i++) {
     const t4 = performance.now();
-    await pipe(inputs);
+    await pipe(inputs, taskOptions);
     const t5 = performance.now();
     subsequentTimes.push(+(t5 - t4).toFixed(1));
   }
@@ -63,8 +64,8 @@ export async function runNodeBenchmark(options: BenchmarkOptions): Promise<Bench
     const warmOptions: any = {};
     if (dtype) warmOptions.dtype = dtype;
     const warm = await pipeline(task, modelId, warmOptions);
-    const warmupInputs = Array(batchSize).fill("warmup");
-    await warm(warmupInputs);
+    const { inputs: warmupInputs, options: taskOptions } = getTaskInput(task, batchSize);
+    await warm(warmupInputs, taskOptions);
 
     for (let i = 0; i < repeats; i++) {
       const r = await benchOnce(modelId, task, dtype, batchSize);
