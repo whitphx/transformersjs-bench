@@ -56,6 +56,7 @@ def filter_data(
     device_filter: str,
     mode_filter: str,
     dtype_filter: str,
+    status_filter: str,
 ) -> pd.DataFrame:
     """Filter benchmark data based on user inputs."""
     if df.empty:
@@ -89,6 +90,10 @@ def filter_data(
     if dtype_filter and dtype_filter != "All":
         filtered = filtered[filtered["dtype"] == dtype_filter]
 
+    # Status filter
+    if status_filter and status_filter != "All":
+        filtered = filtered[filtered["status"] == status_filter]
+
     return filtered
 
 
@@ -99,10 +104,9 @@ def create_leaderboard_ui():
     df = load_data()
     formatted_df = format_dataframe(df)
 
-    # Cache raw data in Gradio state to avoid reloading on every filter change
-    raw_data_state = gr.State(df)
-
     with gr.Blocks(title="Transformers.js Benchmark Leaderboard") as demo:
+        # Cache raw data in Gradio state to avoid reloading on every filter change
+        raw_data_state = gr.State(df)
         gr.Markdown("# 🏆 Transformers.js Benchmark Leaderboard")
         gr.Markdown(
             "Compare benchmark results for different models, platforms, and configurations."
@@ -156,6 +160,11 @@ def create_leaderboard_ui():
                 choices=get_unique_values(df, "dtype"),
                 value="All",
             )
+            status_filter = gr.Dropdown(
+                label="Status",
+                choices=get_unique_values(df, "status"),
+                value="All",
+            )
 
         results_table = gr.DataFrame(
             value=formatted_df,
@@ -193,12 +202,13 @@ def create_leaderboard_ui():
                 gr.update(choices=get_unique_values(new_df, "device")),
                 gr.update(choices=get_unique_values(new_df, "mode")),
                 gr.update(choices=get_unique_values(new_df, "dtype")),
+                gr.update(choices=get_unique_values(new_df, "status")),
             )
 
-        def apply_filters(raw_df, model, task, platform, device, mode, dtype):
+        def apply_filters(raw_df, model, task, platform, device, mode, dtype, status):
             """Apply filters and return filtered DataFrame."""
             # Use cached raw data instead of reloading
-            filtered = filter_data(raw_df, model, task, platform, device, mode, dtype)
+            filtered = filter_data(raw_df, model, task, platform, device, mode, dtype, status)
             return format_dataframe(filtered)
 
         # Refresh button updates data and resets filters
@@ -212,6 +222,7 @@ def create_leaderboard_ui():
                 device_filter,
                 mode_filter,
                 dtype_filter,
+                status_filter,
             ],
         )
 
@@ -224,6 +235,7 @@ def create_leaderboard_ui():
             device_filter,
             mode_filter,
             dtype_filter,
+            status_filter,
         ]
 
         model_filter.change(
@@ -252,6 +264,11 @@ def create_leaderboard_ui():
             outputs=results_table,
         )
         dtype_filter.change(
+            fn=apply_filters,
+            inputs=filter_inputs,
+            outputs=results_table,
+        )
+        status_filter.change(
             fn=apply_filters,
             inputs=filter_inputs,
             outputs=results_table,

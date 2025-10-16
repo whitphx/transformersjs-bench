@@ -109,6 +109,11 @@ def flatten_result(result: Dict[str, Any]) -> Dict[str, Any]:
         except (ValueError, OSError):
             timestamp_dt = None
 
+    # Determine actual status - if there's an error, it should be "failed"
+    status = result.get("status", "")
+    if "error" in result:
+        status = "failed"
+
     flat = {
         "id": result.get("id", ""),
         "platform": result.get("platform", ""),
@@ -121,9 +126,16 @@ def flatten_result(result: Dict[str, Any]) -> Dict[str, Any]:
         "browser": result.get("browser", ""),
         "dtype": result.get("dtype", ""),
         "headed": result.get("headed", False),
-        "status": result.get("status", ""),
+        "status": status,
         "timestamp": timestamp_dt,
         "runtime": result.get("runtime", ""),
+        # Initialize metric fields with None (will be filled if metrics exist)
+        "load_ms_p50": None,
+        "load_ms_p90": None,
+        "first_infer_ms_p50": None,
+        "first_infer_ms_p90": None,
+        "subsequent_infer_ms_p50": None,
+        "subsequent_infer_ms_p90": None,
     }
 
     # Extract metrics if available (already at top level)
