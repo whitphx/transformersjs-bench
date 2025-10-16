@@ -74,6 +74,9 @@ def load_benchmark_data(
         # Enrich with HuggingFace model metadata
         df = enrich_with_hf_metadata(df)
 
+        # Add first-timer-friendly score
+        df = add_first_timer_score(df)
+
         # Sort by model name and timestamp
         if "modelId" in df.columns and "timestamp" in df.columns:
             df = df.sort_values(["modelId", "timestamp"], ascending=[True, False])
@@ -194,6 +197,97 @@ def enrich_with_hf_metadata(df: pd.DataFrame) -> pd.DataFrame:
     # Add metadata to dataframe
     df["downloads"] = df["modelId"].map(lambda x: model_metadata.get(x, {}).get("downloads", 0))
     df["likes"] = df["modelId"].map(lambda x: model_metadata.get(x, {}).get("likes", 0))
+
+    return df
+
+
+def add_first_timer_score(df: pd.DataFrame) -> pd.DataFrame:
+    """Add first-timer-friendly score to all rows in the dataframe.
+
+    The score is calculated per task, normalized from 0-100 where:
+    - Higher score = better for first-timers
+    - Based on: downloads (25%), likes (15%), load time (30%), inference time (30%)
+
+    Args:
+        df: DataFrame containing benchmark results
+
+    Returns:
+        DataFrame with added 'first_timer_score' column
+    """
+    if df.empty:
+        return df
+
+    # Filter only successful benchmarks
+    filtered = df[df["status"] == "completed"].copy() if "status" in df.columns else df.copy()
+
+    if filtered.empty:
+        # Add empty score column for failed benchmarks
+        df["first_timer_score"] = None
+        return df
+
+    # Check if task column exists
+    if "task" not in filtered.columns:
+        df["first_timer_score"] = None
+        return df
+
+    # Calculate score per task
+    for task in filtered["task"].unique():
+        task_mask = filtered["task"] == task
+        task_df = filtered[task_mask].copy()
+
+        if task_df.empty:
+            continue
+
+        # Normalize metrics within this task (0-1 scale)
+
+        # Downloads score (0-1, higher is better)
+        if "downloads" in task_df.columns:
+            max_downloads = task_df["downloads"].max()
+            downloads_score = task_df["downloads"] / max_downloads if max_downloads > 0 else 0
+        else:
+            downloads_score = 0
+
+        # Likes score (0-1, higher is better)
+        if "likes" in task_df.columns:
+            max_likes = task_df["likes"].max()
+            likes_score = task_df["likes"] / max_likes if max_likes > 0 else 0
+        else:
+            likes_score = 0
+
+        # Load time score (0-1, lower time is better)
+        if "load_ms_p50" in task_df.columns:
+            max_load = task_df["load_ms_p50"].max()
+            load_score = 1 - (task_df["load_ms_p50"] / max_load) if max_load > 0 else 0
+        else:
+            load_score = 0
+
+        # Inference time score (0-1, lower time is better)
+        if "first_infer_ms_p50" in task_df.columns:
+            max_infer = task_df["first_infer_ms_p50"].max()
+            infer_score = 1 - (task_df["first_infer_ms_p50"] / max_infer) if max_infer > 0 else 0
+        else:
+            infer_score = 0
+
+        # Calculate weighted score and scale to 0-100
+        weighted_score = (
+            (downloads_score * 0.25) +
+            (likes_score * 0.15) +
+            (load_score * 0.30) +
+            (infer_score * 0.30)
+        ) * 100
+
+        # Assign scores back to the filtered dataframe
+        filtered.loc[task_mask, "first_timer_score"] = weighted_score
+
+    # Merge scores back to original dataframe
+    if "first_timer_score" in filtered.columns:
+        df = df.merge(
+            filtered[["id", "first_timer_score"]],
+            on="id",
+            how="left"
+        )
+    else:
+        df["first_timer_score"] = None
 
     return df
 

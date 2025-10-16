@@ -13,7 +13,6 @@ from dotenv import load_dotenv
 from leaderboard.data_loader import (
     load_benchmark_data,
     get_unique_values,
-    get_first_timer_friendly_models,
 )
 from leaderboard.formatters import apply_formatting
 
@@ -115,23 +114,10 @@ def create_leaderboard_ui():
                 "Please set the environment variable to load benchmark data."
             )
 
-        # First-timer-friendly models section
-        with gr.Accordion("✨ First-Timer-Friendly Models", open=True):
-            gr.Markdown(
-                "These models are great for first-timers! They're popular, fast to load, "
-                "and quick to run. Perfect for getting started with Transformers.js.\n\n"
-                "**Showing top 3 models per task type.**"
-            )
-
-            first_timer_models = get_first_timer_friendly_models(df, limit_per_task=3)
-            formatted_first_timer = format_dataframe(first_timer_models)
-
-            first_timer_table = gr.DataFrame(
-                value=formatted_first_timer,
-                label="Top First-Timer-Friendly Models (by Task)",
-                interactive=False,
-                wrap=True,
-            )
+        gr.Markdown(
+            "💡 **Tip:** Sort by the **first_timer_score** column to find models that are "
+            "popular, fast to load, and quick to run - perfect for getting started!"
+        )
 
         with gr.Row():
             refresh_btn = gr.Button("🔄 Refresh Data", variant="primary")
@@ -187,7 +173,11 @@ def create_leaderboard_ui():
             "- **p50/p90**: 50th and 90th percentile values\n\n"
             "**HuggingFace Metrics:**\n"
             "- **downloads**: Total downloads from HuggingFace Hub\n"
-            "- **likes**: Number of likes on HuggingFace Hub"
+            "- **likes**: Number of likes on HuggingFace Hub\n\n"
+            "**First-Timer Score:**\n"
+            "- **first_timer_score**: 0-100 score combining popularity (40%), load time (30%), and inference time (30%)\n"
+            "- Higher score = better for first-timers (normalized per task)\n"
+            "- ⭐⭐⭐ Excellent (80+), ⭐⭐ Good (60+), ⭐ Fair (40+)"
         )
 
         def update_data():
@@ -195,13 +185,8 @@ def create_leaderboard_ui():
             new_df = load_data()
             formatted_new_df = format_dataframe(new_df)
 
-            # Update first-timer-friendly models (3 per task)
-            new_first_timer = get_first_timer_friendly_models(new_df, limit_per_task=3)
-            formatted_new_first_timer = format_dataframe(new_first_timer)
-
             return (
                 new_df,  # Update cached raw data
-                formatted_new_first_timer,
                 formatted_new_df,
                 gr.update(choices=get_unique_values(new_df, "task")),
                 gr.update(choices=get_unique_values(new_df, "platform")),
@@ -221,7 +206,6 @@ def create_leaderboard_ui():
             fn=update_data,
             outputs=[
                 raw_data_state,
-                first_timer_table,
                 results_table,
                 task_filter,
                 platform_filter,

@@ -244,6 +244,31 @@ def format_likes(likes: Optional[int]) -> str:
     return f"{emoji} {likes}"
 
 
+def format_first_timer_score(score: Optional[float]) -> str:
+    """Format first-timer-friendly score with emoji.
+
+    Args:
+        score: First-timer score (0-100)
+
+    Returns:
+        Formatted string with emoji
+    """
+    if score is None:
+        return "-"
+
+    # Format based on score (0-100 scale)
+    if score >= 80:
+        emoji = "⭐⭐⭐"  # Excellent
+    elif score >= 60:
+        emoji = "⭐⭐"  # Good
+    elif score >= 40:
+        emoji = "⭐"  # Fair
+    else:
+        emoji = "·"  # Below average
+
+    return f"{emoji} {score:.0f}"
+
+
 def apply_formatting(df_dict: dict) -> dict:
     """Apply emoji formatting to a benchmark result dictionary.
 
@@ -313,5 +338,9 @@ def apply_formatting(df_dict: dict) -> dict:
 
     if "likes" in formatted:
         formatted["likes"] = format_likes(formatted["likes"])
+
+    # Format first-timer score
+    if "first_timer_score" in formatted:
+        formatted["first_timer_score"] = format_first_timer_score(formatted["first_timer_score"])
 
     return formatted
