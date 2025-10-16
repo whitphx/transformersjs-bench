@@ -269,19 +269,19 @@ yargs(hideBin(process.argv))
     }
   )
   .command(
-    "batch <task> [query...]",
+    "batch [query...]",
     "Search HuggingFace models and submit benchmarks for them",
     (yargs) => {
       return yargs
-        .positional("task", {
-          describe: "Task type (e.g., feature-extraction, text-classification, fill-mask)",
-          choices: Object.keys(PIPELINE_DATA),
-          demandOption: true,
-        })
         .positional("query", {
           describe: "Optional search queries to filter model names (can specify multiple)",
           type: "string",
           array: true,
+        })
+        .option("task", {
+          describe: "Task type to filter models (e.g., feature-extraction, image-classification)",
+          choices: Object.keys(PIPELINE_DATA),
+          alias: "t",
         })
         .option("limit", {
           describe: "Maximum number of models to benchmark",
@@ -330,12 +330,25 @@ yargs(hideBin(process.argv))
         });
     },
     async (argv) => {
+      // Validate that at least one of task or query is provided
+      const task = argv.task as keyof typeof PIPELINE_DATA | undefined;
       const queries = argv.query && argv.query.length > 0 ? argv.query : undefined;
+
+      if (!task && !queries) {
+        console.error("Error: You must specify either a task type or search queries (or both)");
+        console.error("Examples:");
+        console.error("  batch feature-extraction bert");
+        console.error("  batch feature-extraction");
+        console.error("  batch bert distilbert");
+        process.exit(1);
+      }
+
+      const taskText = task ? `${task} ` : "";
       const queryText = queries && queries.length > 0
         ? ` matching [${queries.join(", ")}]`
         : "";
 
-      console.log(`Searching for ${argv.task} models${queryText}...\n`);
+      console.log(`Searching for ${taskText}models${queryText}...\n`);
 
       let allModels: ModelEntry[] = [];
 
@@ -344,12 +357,12 @@ yargs(hideBin(process.argv))
         const modelSets: ModelEntry[][] = [];
         for (const query of queries) {
           const models = await searchModels({
-            task: argv.task as keyof typeof PIPELINE_DATA,
+            task: task,
             search: query,
             limit: argv.limit,
           });
           modelSets.push(models);
-          console.log(`  Found ${models.length} models for query "${query}"`);
+          console.log(`  Found ${models.length} models for query "${query}"${task ? ` (task: ${task})` : ""}`);
         }
 
         // Deduplicate models by ID
@@ -362,9 +375,9 @@ yargs(hideBin(process.argv))
         allModels = Array.from(modelMap.values());
         console.log(`  Total unique models: ${allModels.length}\n`);
       } else {
-        // No query specified, search all
+        // No query specified, search by task only
         allModels = await searchModels({
-          task: argv.task as keyof typeof PIPELINE_DATA,
+          task: task,
           limit: argv.limit,
         });
       }
@@ -389,6 +402,7 @@ yargs(hideBin(process.argv))
 
       const combinations: Array<{
         modelId: string;
+        task?: string;
         platform: string;
         mode: string;
         batchSize: number;
@@ -406,6 +420,7 @@ yargs(hideBin(process.argv))
                   for (const dtype of dtypes) {
                     combinations.push({
                       modelId: (model as any).name || model.id,
+                      task: model.task || undefined, // Store model's task for later use
                       platform,
                       mode,
                       batchSize,
@@ -453,9 +468,12 @@ yargs(hideBin(process.argv))
 
       for (const combo of combinations) {
         try {
+          // Use task from model if not specified in command
+          const modelTask = task || (combo as any).task || "feature-extraction";
+
           const options: SubmitOptions = {
             modelId: combo.modelId,
-            task: argv.task,
+            task: modelTask,
             platform: combo.platform as "node" | "web",
             mode: combo.mode as "warm" | "cold",
             repeats: argv.repeats,
