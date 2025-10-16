@@ -4,10 +4,11 @@ Data loader module for loading benchmark results from HuggingFace Dataset.
 
 import json
 import logging
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import pandas as pd
-from huggingface_hub import HfApi, hf_hub_download, list_models
+from huggingface_hub import snapshot_download, list_models
 
 logger = logging.getLogger(__name__)
 
@@ -29,30 +30,32 @@ def load_benchmark_data(
         return pd.DataFrame()
 
     try:
-        api = HfApi(token=token)
-
-        # List all files in the dataset repo
-        files = api.list_repo_files(
+        # Download the entire repository snapshot
+        logger.info(f"Downloading dataset snapshot from {dataset_repo}...")
+        local_dir = snapshot_download(
             repo_id=dataset_repo,
             repo_type="dataset",
             token=token,
         )
+        logger.info(f"Dataset downloaded to {local_dir}")
 
-        # Filter for .json files
-        json_files = [f for f in files if f.endswith(".json")]
+        # Find all JSON files in the downloaded directory
+        local_path = Path(local_dir)
+        json_files = list(local_path.rglob("*.json"))
 
         if not json_files:
+            logger.warning("No JSON files found in dataset")
             return pd.DataFrame()
+
+        logger.info(f"Found {len(json_files)} JSON files")
 
         # Load all benchmark results
         all_results = []
         for file_path in json_files:
             try:
-                result = load_single_benchmark_file(
-                    dataset_repo=dataset_repo,
-                    file_path=file_path,
-                    token=token,
-                )
+                with open(file_path, "r") as f:
+                    result = json.load(f)
+
                 if result:
                     flattened = flatten_result(result)
                     all_results.append(flattened)
@@ -62,6 +65,8 @@ def load_benchmark_data(
 
         if not all_results:
             return pd.DataFrame()
+
+        logger.info(f"Loaded {len(all_results)} benchmark results")
 
         # Convert to DataFrame
         df = pd.DataFrame(all_results)
@@ -78,39 +83,6 @@ def load_benchmark_data(
     except Exception as e:
         logger.error(f"Error loading benchmark data: {e}")
         return pd.DataFrame()
-
-
-def load_single_benchmark_file(
-    dataset_repo: str,
-    file_path: str,
-    token: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
-    """Load a single benchmark result file from HuggingFace Dataset.
-
-    Args:
-        dataset_repo: HuggingFace dataset repository ID
-        file_path: Path to the JSON file within the dataset
-        token: HuggingFace API token (optional)
-
-    Returns:
-        Dictionary containing the benchmark result, or None if failed
-    """
-    try:
-        # Download the file
-        local_path = hf_hub_download(
-            repo_id=dataset_repo,
-            filename=file_path,
-            repo_type="dataset",
-            token=token,
-        )
-
-        # Read JSON file (single object per file)
-        with open(local_path, "r") as f:
-            return json.load(f)
-
-    except Exception as e:
-        logger.error(f"Error loading file {file_path}: {e}")
-        return None
 
 
 def flatten_result(result: Dict[str, Any]) -> Dict[str, Any]:
@@ -305,7 +277,13 @@ def get_first_timer_friendly_models(df: pd.DataFrame, limit_per_task: int = 3) -
         )
 
         # Group by model and take best score for each model within this task
-        best_per_model = task_df.loc[task_df.groupby("modelId")["first_timer_score"].idxmax()]
+        # Filter out NaN scores before getting idxmax
+        idx_max_series = task_df.groupby("modelId")["first_timer_score"].idxmax()
+        # Drop NaN indices
+        valid_indices = idx_max_series.dropna()
+        if valid_indices.empty:
+            continue
+        best_per_model = task_df.loc[valid_indices]
 
         # Sort by first-timer score and take top N for this task
         top_for_task = best_per_model.sort_values("first_timer_score", ascending=False).head(limit_per_task)

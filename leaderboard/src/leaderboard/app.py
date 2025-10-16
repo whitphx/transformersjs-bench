@@ -100,6 +100,9 @@ def create_leaderboard_ui():
     df = load_data()
     formatted_df = format_dataframe(df)
 
+    # Cache raw data in Gradio state to avoid reloading on every filter change
+    raw_data_state = gr.State(df)
+
     with gr.Blocks(title="Transformers.js Benchmark Leaderboard") as demo:
         gr.Markdown("# 🏆 Transformers.js Benchmark Leaderboard")
         gr.Markdown(
@@ -197,6 +200,7 @@ def create_leaderboard_ui():
             formatted_new_first_timer = format_dataframe(new_first_timer)
 
             return (
+                new_df,  # Update cached raw data
                 formatted_new_first_timer,
                 formatted_new_df,
                 gr.update(choices=get_unique_values(new_df, "task")),
@@ -206,10 +210,9 @@ def create_leaderboard_ui():
                 gr.update(choices=get_unique_values(new_df, "dtype")),
             )
 
-        def apply_filters(formatted_df, model, task, platform, device, mode, dtype):
+        def apply_filters(raw_df, model, task, platform, device, mode, dtype):
             """Apply filters and return filtered DataFrame."""
-            # Need to reload raw data to filter, then format
-            raw_df = load_data()
+            # Use cached raw data instead of reloading
             filtered = filter_data(raw_df, model, task, platform, device, mode, dtype)
             return format_dataframe(filtered)
 
@@ -217,6 +220,7 @@ def create_leaderboard_ui():
         refresh_btn.click(
             fn=update_data,
             outputs=[
+                raw_data_state,
                 first_timer_table,
                 results_table,
                 task_filter,
@@ -227,9 +231,9 @@ def create_leaderboard_ui():
             ],
         )
 
-        # Filter inputs update the table
+        # Filter inputs update the table (using cached raw data)
         filter_inputs = [
-            results_table,
+            raw_data_state,
             model_filter,
             task_filter,
             platform_filter,
