@@ -269,7 +269,7 @@ yargs(hideBin(process.argv))
     }
   )
   .command(
-    "batch <task> [query]",
+    "batch <task> [query...]",
     "Search HuggingFace models and submit benchmarks for them",
     (yargs) => {
       return yargs
@@ -279,8 +279,9 @@ yargs(hideBin(process.argv))
           demandOption: true,
         })
         .positional("query", {
-          describe: "Optional search query to filter model names",
+          describe: "Optional search queries to filter model names (can specify multiple)",
           type: "string",
+          array: true,
         })
         .option("limit", {
           describe: "Maximum number of models to benchmark",
@@ -329,21 +330,52 @@ yargs(hideBin(process.argv))
         });
     },
     async (argv) => {
-      console.log(`Searching for ${argv.task} models${argv.query ? ` matching "${argv.query}"` : ""}...\n`);
+      const queries = argv.query && argv.query.length > 0 ? argv.query : undefined;
+      const queryText = queries && queries.length > 0
+        ? ` matching [${queries.join(", ")}]`
+        : "";
 
-      const models = await searchModels({
-        task: argv.task as keyof typeof PIPELINE_DATA,
-        search: argv.query,
-        limit: argv.limit,
-      });
+      console.log(`Searching for ${argv.task} models${queryText}...\n`);
 
-      if (models.length === 0) {
+      let allModels: ModelEntry[] = [];
+
+      if (queries && queries.length > 0) {
+        // Search with each query and combine results
+        const modelSets: ModelEntry[][] = [];
+        for (const query of queries) {
+          const models = await searchModels({
+            task: argv.task as keyof typeof PIPELINE_DATA,
+            search: query,
+            limit: argv.limit,
+          });
+          modelSets.push(models);
+          console.log(`  Found ${models.length} models for query "${query}"`);
+        }
+
+        // Deduplicate models by ID
+        const modelMap = new Map<string, ModelEntry>();
+        for (const models of modelSets) {
+          for (const model of models) {
+            modelMap.set(model.id, model);
+          }
+        }
+        allModels = Array.from(modelMap.values());
+        console.log(`  Total unique models: ${allModels.length}\n`);
+      } else {
+        // No query specified, search all
+        allModels = await searchModels({
+          task: argv.task as keyof typeof PIPELINE_DATA,
+          limit: argv.limit,
+        });
+      }
+
+      if (allModels.length === 0) {
         console.log("No models found.");
         return;
       }
 
-      console.log(`Found ${models.length} models:\n`);
-      models.forEach((model, index) => {
+      console.log(`Found ${allModels.length} models:\n`);
+      allModels.forEach((model, index) => {
         console.log(`${index + 1}. ${formatModel(model)}`);
       });
 
@@ -365,7 +397,7 @@ yargs(hideBin(process.argv))
         dtype: string;
       }> = [];
 
-      for (const model of models) {
+      for (const model of allModels) {
         for (const platform of platforms) {
           for (const mode of modes) {
             for (const batchSize of batchSizes) {
@@ -390,7 +422,7 @@ yargs(hideBin(process.argv))
       }
 
       console.log(`\n📊 Benchmark Plan:`);
-      console.log(`  Models: ${models.length}`);
+      console.log(`  Models: ${allModels.length}`);
       console.log(`  Platforms: ${platforms.join(", ")}`);
       console.log(`  Modes: ${modes.join(", ")}`);
       console.log(`  Batch Sizes: ${batchSizes.join(", ")}`);
