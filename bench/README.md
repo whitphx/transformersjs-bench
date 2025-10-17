@@ -80,6 +80,20 @@ Then open http://localhost:5173 to use the interactive web interface.
 | `--browser` | Browser type (web only) | `chromium` | `chromium`, `firefox`, `webkit` |
 | `--headed` | Run browser in headed mode | `false` | `true`, `false` |
 
+## Environment Variables
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `PLAYWRIGHT_TIMEOUT` | Playwright page timeout (ms) | `300000` (5 min) | `1800000` (30 min) |
+| `NAVIGATION_TIMEOUT` | Page navigation timeout (ms) | `60000` (1 min) | `120000` (2 min) |
+
+**Note**: The default Playwright timeout is set to 5 minutes. For large models that require longer download times, you can increase this with environment variables:
+
+```bash
+# Set custom timeouts (in milliseconds)
+PLAYWRIGHT_TIMEOUT=3600000 NAVIGATION_TIMEOUT=120000 npm run bench:web -- <model> <task>
+```
+
 ## Architecture
 
 ```

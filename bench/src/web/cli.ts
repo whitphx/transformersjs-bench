@@ -29,6 +29,10 @@ const batchSize = Math.max(1, parseInt(getArg("batch-size", "1") || "1", 10));
 const browserType = getArg("browser", "chromium") as "chromium" | "firefox" | "webkit";
 const headed = getArg("headed") === "true";
 
+// Timeout configuration (in milliseconds)
+const PLAYWRIGHT_TIMEOUT = parseInt(process.env.PLAYWRIGHT_TIMEOUT || String(5 * 60 * 1000), 10); // Default: 5 minutes
+const NAVIGATION_TIMEOUT = parseInt(process.env.NAVIGATION_TIMEOUT || String(60 * 1000), 10); // Default: 1 minute
+
 async function main() {
   console.log(`Model      : ${modelId}`);
   console.log(`Task       : ${task}`);
@@ -39,6 +43,7 @@ async function main() {
   console.log(`Batch Size : ${batchSize}`);
   console.log(`Browser    : ${browserType}`);
   console.log(`Headed     : ${headed}`);
+  console.log(`Timeout    : ${PLAYWRIGHT_TIMEOUT / 1000}s (navigation: ${NAVIGATION_TIMEOUT / 1000}s)`);
 
   // Start Vite dev server
   const server = await createServer({
@@ -106,6 +111,11 @@ async function main() {
   try {
     const context = await browser.newContext();
     const page = await context.newPage();
+
+    // Set page timeouts for long-running benchmarks and large model downloads
+    // Can be configured via PLAYWRIGHT_TIMEOUT and NAVIGATION_TIMEOUT env vars
+    page.setDefaultTimeout(PLAYWRIGHT_TIMEOUT);
+    page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT);
 
     // Expose console logs
     page.on("console", (msg) => {
