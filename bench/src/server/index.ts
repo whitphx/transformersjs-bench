@@ -7,6 +7,7 @@ import { HFDatasetUploader } from "./hf-dataset.js";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { config as dotenvConfig } from "dotenv";
+import { logger } from "../core/logger.js";
 
 // Load environment variables
 dotenvConfig();
@@ -26,9 +27,9 @@ const hfUploader = new HFDatasetUploader(
 );
 
 if (hfUploader.isEnabled()) {
-  console.log(`📤 HF Dataset upload enabled: ${process.env.HF_DATASET_REPO}`);
+  logger.log(`📤 HF Dataset upload enabled: ${process.env.HF_DATASET_REPO}`);
 } else {
-  console.log("📤 HF Dataset upload disabled (set HF_DATASET_REPO and HF_TOKEN to enable)");
+  logger.log("📤 HF Dataset upload disabled (set HF_DATASET_REPO and HF_TOKEN to enable)");
 }
 
 // Enable CORS for development
@@ -38,9 +39,9 @@ app.use("/*", cors());
 queue.on("completed", async (benchmark) => {
   try {
     await storage.appendResult(benchmark);
-    console.log(`✓ Benchmark ${benchmark.id} saved to file`);
+    logger.log(`✓ Benchmark ${benchmark.id} saved to file`);
   } catch (error) {
-    console.error(`✗ Failed to save benchmark ${benchmark.id}:`, error);
+    logger.error(`✗ Failed to save benchmark ${benchmark.id}:`, error);
   }
 
   // Upload to HF Dataset if enabled
@@ -48,7 +49,7 @@ queue.on("completed", async (benchmark) => {
     try {
       await hfUploader.uploadResult(benchmark);
     } catch (error) {
-      console.error(`✗ Failed to upload benchmark ${benchmark.id} to HF Dataset:`, error);
+      logger.error(`✗ Failed to upload benchmark ${benchmark.id} to HF Dataset:`, error);
       // Don't fail the whole operation if HF upload fails
     }
   }
@@ -57,9 +58,9 @@ queue.on("completed", async (benchmark) => {
 queue.on("failed", async (benchmark) => {
   try {
     await storage.appendResult(benchmark);
-    console.log(`✗ Failed benchmark ${benchmark.id} saved to file`);
+    logger.log(`✗ Failed benchmark ${benchmark.id} saved to file`);
   } catch (error) {
-    console.error(`✗ Failed to save failed benchmark ${benchmark.id}:`, error);
+    logger.error(`✗ Failed to save failed benchmark ${benchmark.id}:`, error);
   }
 
   // Don't upload failed benchmarks to HF Dataset
@@ -68,19 +69,19 @@ queue.on("failed", async (benchmark) => {
 
 // Log queue events
 queue.on("added", (benchmark) => {
-  console.log(`📥 Added to queue: ${benchmark.id} (${benchmark.platform}/${benchmark.modelId})`);
+  logger.log(`📥 Added to queue: ${benchmark.id} (${benchmark.platform}/${benchmark.modelId})`);
 });
 
 queue.on("started", (benchmark) => {
-  console.log(`🚀 Started: ${benchmark.id}`);
+  logger.log(`🚀 Started: ${benchmark.id}`);
 });
 
 queue.on("completed", (benchmark) => {
-  console.log(`✅ Completed: ${benchmark.id} in ${(benchmark.completedAt! - benchmark.startedAt!) / 1000}s`);
+  logger.log(`✅ Completed: ${benchmark.id} in ${(benchmark.completedAt! - benchmark.startedAt!) / 1000}s`);
 });
 
 queue.on("failed", (benchmark) => {
-  console.log(`❌ Failed: ${benchmark.id} - ${benchmark.error}`);
+  logger.log(`❌ Failed: ${benchmark.id} - ${benchmark.error}`);
 });
 
 // API Endpoints
@@ -282,7 +283,7 @@ serve({
   fetch: app.fetch,
   port: PORT,
 }, (info) => {
-  console.log(`
+  logger.log(`
 🚀 Benchmark Server running on http://localhost:${info.port}
 
 API Endpoints:

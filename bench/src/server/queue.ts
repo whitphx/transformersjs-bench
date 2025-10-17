@@ -1,5 +1,6 @@
 import { EventEmitter } from "events";
 import { BenchmarkResult } from "../core/types.js";
+import { logger } from "../core/logger.js";
 
 export interface BenchmarkRequest {
   id: string;
@@ -80,14 +81,14 @@ export class BenchmarkQueue extends EventEmitter {
       if (error instanceof Error) {
         pending.error = error.message;
         // Log full error details to console
-        console.error(`\n❌ Benchmark ${pending.id} failed:`);
-        console.error(`   Message: ${error.message}`);
+        logger.error(`\n❌ Benchmark ${pending.id} failed:`);
+        logger.error(`   Message: ${error.message}`);
         if (error.stack) {
-          console.error(`   Stack trace:\n${error.stack}`);
+          logger.error(`   Stack trace:\n${error.stack}`);
         }
       } else {
         pending.error = String(error);
-        console.error(`\n❌ Benchmark ${pending.id} failed: ${pending.error}`);
+        logger.error(`\n❌ Benchmark ${pending.id} failed: ${pending.error}`);
       }
       pending.completedAt = Date.now();
       this.emit("failed", pending);
@@ -114,7 +115,7 @@ export class BenchmarkQueue extends EventEmitter {
       ];
       if (request.dtype) args.push(`--dtype=${request.dtype}`);
 
-      console.log(`\n[Queue] Dispatching node benchmark with command: tsx ${args.join(' ')}`);
+      logger.log(`\n[Queue] Dispatching node benchmark with command: tsx ${args.join(' ')}`);
 
       return new Promise((resolve, reject) => {
         const proc = spawn("tsx", args, { cwd: process.cwd() });
@@ -167,7 +168,7 @@ export class BenchmarkQueue extends EventEmitter {
       if (request.browser) args.push(`--browser=${request.browser}`);
       if (request.headed) args.push(`--headed=true`);
 
-      console.log(`\n[Queue] Dispatching web benchmark with command: tsx ${args.join(' ')}`);
+      logger.log(`\n[Queue] Dispatching web benchmark with command: tsx ${args.join(' ')}`);
 
       return new Promise((resolve, reject) => {
         const proc = spawn("tsx", args, { cwd: process.cwd() });

@@ -10,6 +10,7 @@
 import { uploadFile, listFiles } from "@huggingface/hub";
 import { generateBenchmarkPath, type BenchmarkSettings } from "../core/benchmark-id.js";
 import type { QueuedBenchmark } from "./queue.js";
+import { logger } from "../core/logger.js";
 
 export interface HFDatasetConfig {
   repo: string;
@@ -142,9 +143,9 @@ export class HFDatasetUploader {
         commitDescription: `Benchmark ID: ${benchmark.id}\nStatus: ${benchmark.status}\nTimestamp: ${new Date(benchmark.timestamp).toISOString()}`,
       });
 
-      console.log(`✓ Uploaded to HF Dataset: ${filePath}`);
+      logger.log(`✓ Uploaded to HF Dataset: ${filePath}`);
     } catch (error: any) {
-      console.error(`✗ Failed to upload to HF Dataset: ${filePath}`, error.message);
+      logger.error(`✗ Failed to upload to HF Dataset: ${filePath}`, error.message);
       throw error;
     }
   }
@@ -172,7 +173,7 @@ export class HFDatasetUploader {
       }
       return files;
     } catch (error: any) {
-      console.error("✗ Failed to list files from HF Dataset", error.message);
+      logger.error("✗ Failed to list files from HF Dataset", error.message);
       throw error;
     }
   }

@@ -6,6 +6,7 @@ import { BenchmarkRawResult, aggregateMetrics } from "../core/metrics.js";
 import { ensureEmptyDir } from "./cache.js";
 import { getSystemInfo } from "../core/sysinfo.js";
 import { getTaskInput } from "../core/task-inputs.js";
+import { logger } from "../core/logger.js";
 
 async function benchOnce(
   modelId: string,
@@ -48,13 +49,13 @@ export async function runNodeBenchmark(options: BenchmarkOptions): Promise<Bench
   const cacheDir = path.resolve(".bench-cache/default");
   env.cacheDir = cacheDir;
 
-  console.log(`Model     : ${modelId}`);
-  console.log(`Task      : ${task}`);
-  console.log(`Mode      : ${mode}`);
-  console.log(`Repeats   : ${repeats}`);
-  console.log(`DType     : ${dtype || 'auto'}`);
-  console.log(`Batch Size: ${batchSize}`);
-  console.log(`Cache     : ${cacheDir}`);
+  logger.log(`Model     : ${modelId}`);
+  logger.log(`Task      : ${task}`);
+  logger.log(`Mode      : ${mode}`);
+  logger.log(`Repeats   : ${repeats}`);
+  logger.log(`DType     : ${dtype || 'auto'}`);
+  logger.log(`Batch Size: ${batchSize}`);
+  logger.log(`Cache     : ${cacheDir}`);
 
   const results: BenchmarkRawResult[] = [];
 
