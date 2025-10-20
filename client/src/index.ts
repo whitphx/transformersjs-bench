@@ -105,6 +105,7 @@ async function fetchExistingBenchmarks(datasetRepo: string, token?: string): Pro
         name: datasetRepo,
       },
       credentials: token ? { accessToken: token } : undefined,
+      recursive: true,
     })) {
       if (file.path.endsWith(".json")) {
         existingFiles.add(file.path);
@@ -120,10 +121,15 @@ async function fetchExistingBenchmarks(datasetRepo: string, token?: string): Pro
 }
 
 /**
- * Generate the expected file path for a benchmark combination
- * Must match the path generation logic in the server
+ * Generate a path pattern to match existing benchmarks
+ * Since we can't predict environment info (CPU cores, memory), we use pattern matching
+ *
+ * Server path format: {task}/{org}/{model}/{platform}_{mode}_{device}_{dtype?}_{batch}_{browser?}_{headed?}_{env...}.json
+ * Example: image-classification/Xenova/beit-large-patch16-384/web_warm_wasm_fp32_b1_chromium_32c_8gb.json
+ *
+ * We generate a prefix pattern and check if any existing file starts with it
  */
-function generateBenchmarkPath(combo: {
+function generateBenchmarkPattern(combo: {
   task: string;
   modelId: string;
   platform: string;
@@ -134,43 +140,54 @@ function generateBenchmarkPath(combo: {
   browser?: string;
   headed?: boolean;
 }): string {
-  // Extract org and model name from modelId
-  const parts = combo.modelId.split("/");
-  const org = parts.length > 1 ? parts[0] : "default";
-  const modelName = parts.length > 1 ? parts[1] : parts[0];
+  // Build directory path: task/modelId/
+  const dirPath = `${combo.task}/${combo.modelId}`;
 
-  // Build path components similar to server logic
-  const pathParts = [
-    combo.task,
-    org,
-    modelName,
-  ];
-
-  // Build filename parts
+  // Build filename parts (same order as server's generateFilenameParts)
   const filenameParts = [
     combo.platform,
     combo.mode,
     combo.device,
-    `b${combo.batchSize}`,
   ];
 
-  // Add dtype if specified and not fp32 (default)
-  if (combo.dtype && combo.dtype !== "fp32") {
+  // Add dtype if specified
+  if (combo.dtype) {
     filenameParts.push(combo.dtype);
   }
 
-  // Add browser for web platform
+  // Batch size
+  filenameParts.push(`b${combo.batchSize}`);
+
+  // Browser for web platform
   if (combo.platform === "web" && combo.browser) {
     filenameParts.push(combo.browser);
   }
 
-  // Add headed indicator for web platform
+  // Headed indicator for web platform
   if (combo.platform === "web" && combo.headed) {
     filenameParts.push("headed");
   }
 
-  const filename = filenameParts.join("_") + ".json";
-  return [...pathParts, filename].join("/");
+  // Return pattern: everything before environment info
+  // The server may add: cpu-name, cores (e.g., "32c"), memory (e.g., "8gb"), arch, gpu-vendor
+  const filenamePrefix = filenameParts.join("_");
+  return `${dirPath}/${filenamePrefix}`;
+}
+
+/**
+ * Check if a benchmark combination matches any existing file
+ * Handles the fact that server adds environment info that we can't predict
+ */
+function matchesExistingBenchmark(pattern: string, existingFiles: Set<string>): boolean {
+  // Check if any existing file starts with our pattern
+  // Example pattern: "image-classification/Xenova/beit-large-patch16-384/web_warm_wasm_fp32_b1_chromium"
+  // Example file: "image-classification/Xenova/beit-large-patch16-384/web_warm_wasm_fp32_b1_chromium_32c_8gb.json"
+  for (const file of existingFiles) {
+    if (file.startsWith(pattern)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 yargs(hideBin(process.argv))
@@ -547,10 +564,10 @@ yargs(hideBin(process.argv))
 
         const existingFiles = await fetchExistingBenchmarks(datasetRepo, hfToken);
 
-        // Filter combinations
+        // Filter combinations using pattern matching
         filteredCombinations = combinations.filter((combo) => {
           const modelTask = task || combo.task || "feature-extraction";
-          const benchmarkPath = generateBenchmarkPath({
+          const pattern = generateBenchmarkPattern({
             task: modelTask,
             modelId: combo.modelId,
             platform: combo.platform,
@@ -561,7 +578,7 @@ yargs(hideBin(process.argv))
             browser: combo.browser,
             headed: false, // Default, as it's not in the combination
           });
-          return !existingFiles.has(benchmarkPath);
+          return !matchesExistingBenchmark(pattern, existingFiles);
         });
 
         const excludedCount = combinations.length - filteredCombinations.length;
