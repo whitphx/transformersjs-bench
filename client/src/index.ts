@@ -7,6 +7,7 @@ import prompts from "prompts";
 import { searchModels, formatModel } from "./hf-api.js";
 import { PIPELINE_DATA } from "@huggingface/tasks";
 import type { ModelEntry } from "@huggingface/hub";
+import { listFiles } from "@huggingface/hub";
 
 const SERVER_URL = process.env.BENCH_SERVER_URL || "http://localhost:7860";
 
@@ -87,6 +88,89 @@ async function pollBenchmark(id: string, interval = 2000): Promise<any> {
     };
     check();
   });
+}
+
+/**
+ * Fetch existing benchmark file paths from HuggingFace Dataset
+ * Returns a Set of file paths for quick lookup
+ */
+async function fetchExistingBenchmarks(datasetRepo: string, token?: string): Promise<Set<string>> {
+  console.log(`\nFetching existing benchmarks from ${datasetRepo}...`);
+  const existingFiles = new Set<string>();
+
+  try {
+    for await (const file of listFiles({
+      repo: {
+        type: "dataset",
+        name: datasetRepo,
+      },
+      credentials: token ? { accessToken: token } : undefined,
+    })) {
+      if (file.path.endsWith(".json")) {
+        existingFiles.add(file.path);
+      }
+    }
+    console.log(`  Found ${existingFiles.size} existing benchmarks\n`);
+  } catch (error: any) {
+    console.warn(`  Warning: Failed to fetch existing benchmarks: ${error.message}`);
+    console.warn(`  Proceeding without exclusion filter\n`);
+  }
+
+  return existingFiles;
+}
+
+/**
+ * Generate the expected file path for a benchmark combination
+ * Must match the path generation logic in the server
+ */
+function generateBenchmarkPath(combo: {
+  task: string;
+  modelId: string;
+  platform: string;
+  mode: string;
+  device: string;
+  dtype: string;
+  batchSize: number;
+  browser?: string;
+  headed?: boolean;
+}): string {
+  // Extract org and model name from modelId
+  const parts = combo.modelId.split("/");
+  const org = parts.length > 1 ? parts[0] : "default";
+  const modelName = parts.length > 1 ? parts[1] : parts[0];
+
+  // Build path components similar to server logic
+  const pathParts = [
+    combo.task,
+    org,
+    modelName,
+  ];
+
+  // Build filename parts
+  const filenameParts = [
+    combo.platform,
+    combo.mode,
+    combo.device,
+    `b${combo.batchSize}`,
+  ];
+
+  // Add dtype if specified and not fp32 (default)
+  if (combo.dtype && combo.dtype !== "fp32") {
+    filenameParts.push(combo.dtype);
+  }
+
+  // Add browser for web platform
+  if (combo.platform === "web" && combo.browser) {
+    filenameParts.push(combo.browser);
+  }
+
+  // Add headed indicator for web platform
+  if (combo.platform === "web" && combo.headed) {
+    filenameParts.push("headed");
+  }
+
+  const filename = filenameParts.join("_") + ".json";
+  return [...pathParts, filename].join("/");
 }
 
 yargs(hideBin(process.argv))
@@ -327,6 +411,20 @@ yargs(hideBin(process.argv))
           describe: "Skip confirmation prompt",
           type: "boolean",
           default: false,
+        })
+        .option("exclude-existing", {
+          alias: "e",
+          describe: "Exclude benchmarks that already exist in the HF Dataset",
+          type: "boolean",
+          default: false,
+        })
+        .option("hf-dataset-repo", {
+          describe: "HuggingFace Dataset repository to check for existing benchmarks",
+          type: "string",
+        })
+        .option("hf-token", {
+          describe: "HuggingFace API token (for private datasets)",
+          type: "string",
         });
     },
     async (argv) => {
@@ -436,6 +534,43 @@ yargs(hideBin(process.argv))
         }
       }
 
+      // Filter out existing benchmarks if requested
+      let filteredCombinations = combinations;
+      if (argv.excludeExisting) {
+        const datasetRepo = argv.hfDatasetRepo || process.env.HF_DATASET_REPO;
+        const hfToken = argv.hfToken || process.env.HF_TOKEN;
+
+        if (!datasetRepo) {
+          console.error("\n❌ Error: --exclude-existing requires --hf-dataset-repo or HF_DATASET_REPO env var");
+          process.exit(1);
+        }
+
+        const existingFiles = await fetchExistingBenchmarks(datasetRepo, hfToken);
+
+        // Filter combinations
+        filteredCombinations = combinations.filter((combo) => {
+          const modelTask = task || combo.task || "feature-extraction";
+          const benchmarkPath = generateBenchmarkPath({
+            task: modelTask,
+            modelId: combo.modelId,
+            platform: combo.platform,
+            mode: combo.mode,
+            device: combo.device,
+            dtype: combo.dtype,
+            batchSize: combo.batchSize,
+            browser: combo.browser,
+            headed: false, // Default, as it's not in the combination
+          });
+          return !existingFiles.has(benchmarkPath);
+        });
+
+        const excludedCount = combinations.length - filteredCombinations.length;
+        console.log(`\n📊 Exclusion Filter:`);
+        console.log(`  Total combinations: ${combinations.length}`);
+        console.log(`  Existing benchmarks: ${excludedCount}`);
+        console.log(`  New benchmarks to run: ${filteredCombinations.length}\n`);
+      }
+
       console.log(`\n📊 Benchmark Plan:`);
       console.log(`  Models: ${allModels.length}`);
       console.log(`  Platforms: ${platforms.join(", ")}`);
@@ -444,14 +579,14 @@ yargs(hideBin(process.argv))
       console.log(`  Devices: ${devices.join(", ")}`);
       console.log(`  Browsers: ${browsers.join(", ")}`);
       console.log(`  DTypes: ${dtypes.join(", ")}`);
-      console.log(`  Total benchmarks: ${combinations.length}`);
+      console.log(`  Total benchmarks: ${filteredCombinations.length}`);
 
       // Ask for confirmation unless -y flag is used
       if (!argv.yes) {
         const response = await prompts({
           type: "confirm",
           name: "proceed",
-          message: `Proceed with submitting ${combinations.length} benchmark(s)?`,
+          message: `Proceed with submitting ${filteredCombinations.length} benchmark(s)?`,
           initial: true,
         });
 
@@ -461,12 +596,12 @@ yargs(hideBin(process.argv))
         }
       }
 
-      console.log(`\nSubmitting ${combinations.length} benchmarks...`);
+      console.log(`\nSubmitting ${filteredCombinations.length} benchmarks...`);
 
       const submitted: string[] = [];
       const failed: Array<{ combo: string; error: string }> = [];
 
-      for (const combo of combinations) {
+      for (const combo of filteredCombinations) {
         try {
           // Use task from model if not specified in command
           const modelTask = task || (combo as any).task || "feature-extraction";
