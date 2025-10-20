@@ -92,14 +92,17 @@ export class BenchmarkQueue extends EventEmitter {
       }
       pending.completedAt = Date.now();
       this.emit("failed", pending);
+    } finally {
+      // Ensure isProcessing is always reset
+      this.isProcessing = false;
+      // Process next item
+      setImmediate(() => this.processQueue());
     }
-
-    this.isProcessing = false;
-    // Process next item
-    setImmediate(() => this.processQueue());
   }
 
   private async runBenchmark(request: BenchmarkRequest): Promise<BenchmarkResult> {
+    const BENCHMARK_TIMEOUT = parseInt(process.env.BENCHMARK_TIMEOUT || String(10 * 60 * 1000), 10); // 10 minutes default
+
     if (request.platform === "node") {
       // Use spawn instead of dynamic import to avoid import.meta.url issues
       const { spawn } = await import("child_process");
@@ -121,6 +124,19 @@ export class BenchmarkQueue extends EventEmitter {
         const proc = spawn("tsx", args, { cwd: process.cwd() });
         let stdout = "";
         let stderr = "";
+        let isResolved = false;
+
+        // Timeout handler
+        const timeoutId = setTimeout(() => {
+          if (!isResolved) {
+            isResolved = true;
+            logger.error(`[Queue] Benchmark ${request.id} timed out after ${BENCHMARK_TIMEOUT / 1000}s`);
+            proc.kill('SIGTERM');
+            // Give it 5 seconds to clean up, then force kill
+            setTimeout(() => proc.kill('SIGKILL'), 5000);
+            reject(new Error(`Benchmark timed out after ${BENCHMARK_TIMEOUT / 1000}s`));
+          }
+        }, BENCHMARK_TIMEOUT);
 
         proc.stdout.on("data", (data) => {
           stdout += data.toString();
@@ -130,23 +146,42 @@ export class BenchmarkQueue extends EventEmitter {
           stderr += data.toString();
         });
 
-        proc.on("close", (code) => {
-          if (code !== 0) {
-            reject(new Error(`Benchmark failed with code ${code}: ${stderr}`));
-            return;
+        // Error handler for spawn failures
+        proc.on("error", (error) => {
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(timeoutId);
+            reject(new Error(`Failed to spawn process: ${error.message}`));
           }
+        });
 
-          // Extract JSON from stdout (last JSON object)
-          const jsonMatch = stdout.match(/\{[\s\S]*"platform"[\s\S]*\}/);
-          if (jsonMatch) {
-            try {
-              const result = JSON.parse(jsonMatch[0]);
-              resolve(result);
-            } catch (e) {
-              reject(new Error(`Failed to parse benchmark result: ${e}`));
+        proc.on("close", (code, signal) => {
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(timeoutId);
+
+            if (signal) {
+              reject(new Error(`Benchmark killed by signal ${signal}`));
+              return;
             }
-          } else {
-            reject(new Error("No benchmark result found in output"));
+
+            if (code !== 0) {
+              reject(new Error(`Benchmark failed with code ${code}: ${stderr}`));
+              return;
+            }
+
+            // Extract JSON from stdout (last JSON object)
+            const jsonMatch = stdout.match(/\{[\s\S]*"platform"[\s\S]*\}/);
+            if (jsonMatch) {
+              try {
+                const result = JSON.parse(jsonMatch[0]);
+                resolve(result);
+              } catch (e) {
+                reject(new Error(`Failed to parse benchmark result: ${e}`));
+              }
+            } else {
+              reject(new Error("No benchmark result found in output"));
+            }
           }
         });
       });
@@ -174,6 +209,19 @@ export class BenchmarkQueue extends EventEmitter {
         const proc = spawn("tsx", args, { cwd: process.cwd() });
         let stdout = "";
         let stderr = "";
+        let isResolved = false;
+
+        // Timeout handler
+        const timeoutId = setTimeout(() => {
+          if (!isResolved) {
+            isResolved = true;
+            logger.error(`[Queue] Benchmark ${request.id} timed out after ${BENCHMARK_TIMEOUT / 1000}s`);
+            proc.kill('SIGTERM');
+            // Give it 5 seconds to clean up, then force kill
+            setTimeout(() => proc.kill('SIGKILL'), 5000);
+            reject(new Error(`Benchmark timed out after ${BENCHMARK_TIMEOUT / 1000}s`));
+          }
+        }, BENCHMARK_TIMEOUT);
 
         proc.stdout.on("data", (data) => {
           stdout += data.toString();
@@ -183,23 +231,42 @@ export class BenchmarkQueue extends EventEmitter {
           stderr += data.toString();
         });
 
-        proc.on("close", (code) => {
-          if (code !== 0) {
-            reject(new Error(`Benchmark failed with code ${code}: ${stderr}`));
-            return;
+        // Error handler for spawn failures
+        proc.on("error", (error) => {
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(timeoutId);
+            reject(new Error(`Failed to spawn process: ${error.message}`));
           }
+        });
 
-          // Extract JSON from stdout (last JSON object)
-          const jsonMatch = stdout.match(/\{[\s\S]*"platform"[\s\S]*\}/);
-          if (jsonMatch) {
-            try {
-              const result = JSON.parse(jsonMatch[0]);
-              resolve(result);
-            } catch (e) {
-              reject(new Error(`Failed to parse benchmark result: ${e}`));
+        proc.on("close", (code, signal) => {
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(timeoutId);
+
+            if (signal) {
+              reject(new Error(`Benchmark killed by signal ${signal}`));
+              return;
             }
-          } else {
-            reject(new Error("No benchmark result found in output"));
+
+            if (code !== 0) {
+              reject(new Error(`Benchmark failed with code ${code}: ${stderr}`));
+              return;
+            }
+
+            // Extract JSON from stdout (last JSON object)
+            const jsonMatch = stdout.match(/\{[\s\S]*"platform"[\s\S]*\}/);
+            if (jsonMatch) {
+              try {
+                const result = JSON.parse(jsonMatch[0]);
+                resolve(result);
+              } catch (e) {
+                reject(new Error(`Failed to parse benchmark result: ${e}`));
+              }
+            } else {
+              reject(new Error("No benchmark result found in output"));
+            }
           }
         });
       });

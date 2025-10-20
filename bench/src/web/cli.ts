@@ -45,70 +45,104 @@ async function main() {
   console.log(`Headed     : ${headed}`);
   console.log(`Timeout    : ${PLAYWRIGHT_TIMEOUT / 1000}s (navigation: ${NAVIGATION_TIMEOUT / 1000}s)`);
 
-  // Start Vite dev server
-  const server = await createServer({
-    configFile: false, // Don't load vite.config.ts to avoid permission issues in read-only filesystems
-    server: {
-      port: 5173,
-      strictPort: false,
-    },
-    logLevel: "error",
-    cacheDir: process.env.VITE_CACHE_DIR || "node_modules/.vite",
-  });
+  let browser: Browser | undefined;
+  let server: Awaited<ReturnType<typeof createServer>> | undefined;
+  let cleanupHandled = false;
 
-  await server.listen();
+  const cleanup = async () => {
+    if (cleanupHandled) return;
+    cleanupHandled = true;
 
-  const port = server.config.server.port || 5173;
-  const url = `http://localhost:${port}`;
+    console.log('\nCleaning up...');
+    try {
+      if (browser) {
+        await browser.close();
+      }
+    } catch (e) {
+      console.error("Failed to close browser:", e);
+    }
 
-  console.log(`Vite server started at ${url}`);
-
-  let browser: Browser;
-
-  // Build args based on mode
-  const args = device === "wasm"
-    ? [
-        "--disable-gpu",
-        "--disable-software-rasterizer",
-        // Increase WASM memory limits for large models
-        "--js-flags=--max-old-space-size=8192",
-      ]
-    : [
-        // Official WebGPU flags from Chrome team
-        // https://developer.chrome.com/blog/supercharge-web-ai-testing#enable-webgpu
-        "--enable-unsafe-webgpu",
-        "--enable-features=Vulkan",
-      ];
-
-  // Add headless-specific flags only in headless mode
-  if (!headed && device !== "wasm") {
-    args.push(
-      "--no-sandbox",
-      "--headless=new",
-      "--use-angle=vulkan",
-      "--disable-vulkan-surface"
-    );
-  }
-
-  const launchOptions = {
-    headless: !headed,
-    args,
+    try {
+      if (server) {
+        await server.close();
+      }
+    } catch (e) {
+      console.error("Failed to close Vite server:", e);
+    }
   };
 
-  switch (browserType) {
-    case "firefox":
-      browser = await firefox.launch(launchOptions);
-      break;
-    case "webkit":
-      browser = await webkit.launch(launchOptions);
-      break;
-    case "chromium":
-    default:
-      browser = await chromium.launch(launchOptions);
-      break;
-  }
+  // Handle termination signals
+  process.on('SIGTERM', async () => {
+    await cleanup();
+    process.exit(0);
+  });
+  process.on('SIGINT', async () => {
+    await cleanup();
+    process.exit(0);
+  });
 
   try {
+    // Start Vite dev server
+    server = await createServer({
+      configFile: false, // Don't load vite.config.ts to avoid permission issues in read-only filesystems
+      server: {
+        port: 5173,
+        strictPort: false,
+      },
+      logLevel: "error",
+      cacheDir: process.env.VITE_CACHE_DIR || "node_modules/.vite",
+    });
+
+    await server.listen();
+
+    const port = server.config.server.port || 5173;
+    const url = `http://localhost:${port}`;
+
+    console.log(`Vite server started at ${url}`);
+
+    // Build args based on mode
+    const args = device === "wasm"
+      ? [
+          "--disable-gpu",
+          "--disable-software-rasterizer",
+          // Increase WASM memory limits for large models
+          "--js-flags=--max-old-space-size=8192",
+        ]
+      : [
+          // Official WebGPU flags from Chrome team
+          // https://developer.chrome.com/blog/supercharge-web-ai-testing#enable-webgpu
+          "--enable-unsafe-webgpu",
+          "--enable-features=Vulkan",
+        ];
+
+    // Add headless-specific flags only in headless mode
+    if (!headed && device !== "wasm") {
+      args.push(
+        "--no-sandbox",
+        "--headless=new",
+        "--use-angle=vulkan",
+        "--disable-vulkan-surface"
+      );
+    }
+
+    const launchOptions = {
+      headless: !headed,
+      args,
+    };
+
+    switch (browserType) {
+      case "firefox":
+        browser = await firefox.launch(launchOptions);
+        break;
+      case "webkit":
+        browser = await webkit.launch(launchOptions);
+        break;
+      case "chromium":
+      default:
+        browser = await chromium.launch(launchOptions);
+        break;
+    }
+
     const context = await browser.newContext();
     const page = await context.newPage();
 
@@ -202,8 +236,7 @@ async function main() {
     }
 
   } finally {
-    await browser.close();
-    await server.close();
+    await cleanup();
   }
 }
 
