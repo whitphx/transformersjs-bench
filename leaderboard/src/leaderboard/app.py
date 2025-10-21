@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 from leaderboard.data_loader import (
     load_benchmark_data,
     get_unique_values,
+    get_webgpu_beginner_friendly_models,
+    format_recommended_models_as_markdown,
 )
 from leaderboard.formatters import apply_formatting
 
@@ -120,9 +122,47 @@ def create_leaderboard_ui():
             )
 
         gr.Markdown(
-            "💡 **Tip:** Sort by the **first_timer_score** column to find models that are "
-            "popular, fast to load, and quick to run - perfect for getting started!"
+            "💡 **Tip:** Use the recommended models section below to find popular models "
+            "that are fast to load and quick to run - perfect for getting started!"
         )
+
+        # Recommended models section
+        gr.Markdown("## ⭐ Recommended WebGPU Models for Beginners")
+        gr.Markdown(
+            "These models are selected for being:\n"
+            "- **WebGPU compatible** - Work in modern browsers with GPU acceleration\n"
+            "- **Beginner-friendly** - Popular, fast to load, and quick to run\n"
+            "- Sorted by task type, showing top 3-5 models per task"
+        )
+
+        # Get recommended models
+        recommended_models = get_webgpu_beginner_friendly_models(df, limit_per_task=5)
+        formatted_recommended = format_dataframe(recommended_models)
+        markdown_output = format_recommended_models_as_markdown(recommended_models)
+
+        recommended_table = gr.DataFrame(
+            value=formatted_recommended,
+            label="Top WebGPU-Compatible Models by Task",
+            interactive=False,
+            wrap=True,
+        )
+
+        gr.Markdown("### 📝 Markdown Output for llms.txt")
+        gr.Markdown(
+            "Copy the markdown below to embed in your llms.txt or documentation:"
+        )
+
+        markdown_textbox = gr.Textbox(
+            value=markdown_output,
+            label="Markdown for llms.txt",
+            lines=20,
+            max_lines=30,
+            show_copy_button=True,
+            interactive=False,
+        )
+
+        gr.Markdown("---")
+        gr.Markdown("## 🔍 Full Benchmark Results")
 
         with gr.Row():
             refresh_btn = gr.Button("🔄 Refresh Data", variant="primary")
@@ -184,10 +224,9 @@ def create_leaderboard_ui():
             "**HuggingFace Metrics:**\n"
             "- **downloads**: Total downloads from HuggingFace Hub\n"
             "- **likes**: Number of likes on HuggingFace Hub\n\n"
-            "**First-Timer Score:**\n"
-            "- **first_timer_score**: 0-100 score combining popularity (40%), load time (30%), and inference time (30%)\n"
-            "- Higher score = better for first-timers (normalized per task)\n"
-            "- ⭐⭐⭐ Excellent (80+), ⭐⭐ Good (60+), ⭐ Fair (40+)"
+            "**WebGPU Compatibility:**\n"
+            "- Models in the recommended section are all WebGPU compatible\n"
+            "- WebGPU enables GPU acceleration in modern browsers"
         )
 
         def update_data():
@@ -195,8 +234,15 @@ def create_leaderboard_ui():
             new_df = load_data()
             formatted_new_df = format_dataframe(new_df)
 
+            # Update recommended models
+            new_recommended = get_webgpu_beginner_friendly_models(new_df, limit_per_task=5)
+            formatted_new_recommended = format_dataframe(new_recommended)
+            new_markdown = format_recommended_models_as_markdown(new_recommended)
+
             return (
                 new_df,  # Update cached raw data
+                formatted_new_recommended,  # Update recommended models
+                new_markdown,  # Update markdown output
                 formatted_new_df,
                 gr.update(choices=get_unique_values(new_df, "task")),
                 gr.update(choices=get_unique_values(new_df, "platform")),
@@ -217,6 +263,8 @@ def create_leaderboard_ui():
             fn=update_data,
             outputs=[
                 raw_data_state,
+                recommended_table,
+                markdown_textbox,
                 results_table,
                 task_filter,
                 platform_filter,

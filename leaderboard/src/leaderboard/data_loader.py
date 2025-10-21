@@ -413,6 +413,191 @@ def get_first_timer_friendly_models(df: pd.DataFrame, limit_per_task: int = 3) -
     return result
 
 
+def get_webgpu_beginner_friendly_models(
+    df: pd.DataFrame,
+    limit_per_task: int = 5
+) -> pd.DataFrame:
+    """Get top beginner-friendly models that are WebGPU compatible, grouped by task.
+
+    A model is included if it:
+    - Has high first_timer_score (popular, fast to load, fast inference)
+    - Has successful WebGPU benchmark results (device=webgpu, status=completed)
+
+    Args:
+        df: DataFrame containing benchmark results
+        limit_per_task: Maximum number of models to return per task (default: 5)
+
+    Returns:
+        DataFrame with top WebGPU-compatible beginner-friendly models per task
+    """
+    if df.empty:
+        return pd.DataFrame()
+
+    # Filter for WebGPU benchmarks that completed successfully
+    webgpu_filter = (
+        (df["device"] == "webgpu") &
+        (df["status"] == "completed")
+    )
+
+    # Check if required columns exist
+    if "device" not in df.columns or "status" not in df.columns:
+        logger.warning("Required columns (device, status) not found in dataframe")
+        return pd.DataFrame()
+
+    filtered = df[webgpu_filter].copy()
+
+    if filtered.empty:
+        logger.warning("No successful WebGPU benchmarks found")
+        return pd.DataFrame()
+
+    # Check if required columns exist
+    if "task" not in filtered.columns or "first_timer_score" not in filtered.columns:
+        logger.warning("Required columns (task, first_timer_score) not found in filtered dataframe")
+        return pd.DataFrame()
+
+    # Group by task and get top models
+    all_results = []
+
+    for task in filtered["task"].unique():
+        task_df = filtered[filtered["task"] == task].copy()
+
+        if task_df.empty:
+            continue
+
+        # Remove rows with NaN first_timer_score
+        task_df = task_df.dropna(subset=["first_timer_score"])
+
+        if task_df.empty:
+            continue
+
+        # For each model, get the benchmark with the highest first_timer_score
+        idx_max_series = task_df.groupby("modelId")["first_timer_score"].idxmax()
+        valid_indices = idx_max_series.dropna()
+
+        if valid_indices.empty:
+            continue
+
+        best_per_model = task_df.loc[valid_indices]
+
+        # Sort by first_timer_score (descending) and take top N
+        top_for_task = best_per_model.sort_values(
+            "first_timer_score",
+            ascending=False
+        ).head(limit_per_task)
+
+        all_results.append(top_for_task)
+
+    if not all_results:
+        logger.warning("No models found after filtering and grouping")
+        return pd.DataFrame()
+
+    # Combine all results
+    result = pd.concat(all_results, ignore_index=True)
+
+    # Sort by task, then by first_timer_score (descending)
+    if "task" in result.columns and "first_timer_score" in result.columns:
+        result = result.sort_values(
+            ["task", "first_timer_score"],
+            ascending=[True, False]
+        )
+
+    return result
+
+
+def format_recommended_models_as_markdown(df: pd.DataFrame) -> str:
+    """Format recommended WebGPU models as markdown for llms.txt embedding.
+
+    Args:
+        df: DataFrame containing recommended models (output from get_webgpu_beginner_friendly_models)
+
+    Returns:
+        Formatted markdown string
+    """
+    if df.empty:
+        return "No recommended models available."
+
+    markdown_lines = [
+        "# Recommended Transformers.js Models (WebGPU Compatible)",
+        "",
+        "These models are optimized for beginners - popular, fast to load, and WebGPU compatible.",
+        "",
+    ]
+
+    # Group by task
+    if "task" not in df.columns:
+        return "No task information available."
+
+    for task in sorted(df["task"].unique()):
+        task_df = df[df["task"] == task].copy()
+
+        if task_df.empty:
+            continue
+
+        # Add task header
+        markdown_lines.append(f"## {task.title()}")
+        markdown_lines.append("")
+
+        # Sort by first_timer_score descending
+        if "first_timer_score" in task_df.columns:
+            task_df = task_df.sort_values("first_timer_score", ascending=False)
+
+        # Add each model
+        for idx, row in task_df.iterrows():
+            model_id = row.get("modelId", "Unknown")
+            score = row.get("first_timer_score", None)
+            downloads = row.get("downloads", 0)
+            likes = row.get("likes", 0)
+            load_time = row.get("load_ms_p50", None)
+            infer_time = row.get("first_infer_ms_p50", None)
+
+            # Model entry
+            markdown_lines.append(f"### {model_id}")
+            markdown_lines.append("")
+
+            # WebGPU compatibility
+            markdown_lines.append("**WebGPU Compatible:** ✅ Yes")
+            markdown_lines.append("")
+
+            # Metrics
+            metrics = []
+            if load_time is not None:
+                metrics.append(f"Load: {load_time:.1f}ms")
+            if infer_time is not None:
+                metrics.append(f"Inference: {infer_time:.1f}ms")
+            if downloads:
+                if downloads >= 1_000_000:
+                    downloads_str = f"{downloads / 1_000_000:.1f}M"
+                elif downloads >= 1_000:
+                    downloads_str = f"{downloads / 1_000:.1f}k"
+                else:
+                    downloads_str = str(downloads)
+                metrics.append(f"Downloads: {downloads_str}")
+            if likes:
+                metrics.append(f"Likes: {likes}")
+
+            if metrics:
+                markdown_lines.append(f"**Metrics:** {' | '.join(metrics)}")
+
+            markdown_lines.append("")
+
+        markdown_lines.append("---")
+        markdown_lines.append("")
+
+    # Add footer
+    markdown_lines.extend([
+        "## About These Recommendations",
+        "",
+        "Models are selected based on:",
+        "- **Popularity**: Downloads and likes from HuggingFace Hub",
+        "- **Performance**: Fast loading and inference times",
+        "- **Compatibility**: All models have successful WebGPU benchmark results",
+        "",
+        "These models are recommended for beginners getting started with Transformers.js.",
+    ])
+
+    return "\n".join(markdown_lines)
+
+
 def get_unique_values(df: pd.DataFrame, column: str) -> List[str]:
     """Get unique values from a column for dropdown choices.
 
