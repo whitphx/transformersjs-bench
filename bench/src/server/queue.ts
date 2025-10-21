@@ -29,6 +29,53 @@ export class BenchmarkQueue extends EventEmitter {
   private queue: QueuedBenchmark[] = [];
   private isProcessing = false;
 
+  /**
+   * Extract JSON from stdout by finding the last valid JSON object
+   * that contains "platform" field
+   */
+  private extractJsonResult(stdout: string): any {
+    // Try to find all potential JSON objects (lines that start with { and contain "platform")
+    const lines = stdout.split('\n');
+
+    // Search backwards for the last valid JSON object with "platform"
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (line.startsWith('{') && line.includes('"platform"')) {
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed.platform) {
+            return parsed;
+          }
+        } catch (e) {
+          // Not valid JSON on this line, continue searching
+          continue;
+        }
+      }
+    }
+
+    // Fallback: try to extract a multi-line JSON object
+    // Find the last occurrence of a JSON block that contains "platform"
+    const jsonMatches = stdout.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g);
+    if (jsonMatches) {
+      // Search backwards through matches
+      for (let i = jsonMatches.length - 1; i >= 0; i--) {
+        const match = jsonMatches[i];
+        if (match.includes('"platform"')) {
+          try {
+            const parsed = JSON.parse(match);
+            if (parsed.platform) {
+              return parsed;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
   addBenchmark(request: BenchmarkRequest): void {
     const queued: QueuedBenchmark = {
       ...request,
@@ -139,11 +186,21 @@ export class BenchmarkQueue extends EventEmitter {
         }, BENCHMARK_TIMEOUT);
 
         proc.stdout.on("data", (data) => {
-          stdout += data.toString();
+          const chunk = data.toString();
+          stdout += chunk;
+          // Log stdout in real-time for debugging
+          if (process.env.DEBUG_BENCHMARK) {
+            logger.log(`[stdout] ${chunk}`);
+          }
         });
 
         proc.stderr.on("data", (data) => {
-          stderr += data.toString();
+          const chunk = data.toString();
+          stderr += chunk;
+          // Log stderr in real-time for debugging
+          if (process.env.DEBUG_BENCHMARK) {
+            logger.error(`[stderr] ${chunk}`);
+          }
         });
 
         // Error handler for spawn failures
@@ -170,17 +227,18 @@ export class BenchmarkQueue extends EventEmitter {
               return;
             }
 
-            // Extract JSON from stdout (last JSON object)
-            const jsonMatch = stdout.match(/\{[\s\S]*"platform"[\s\S]*\}/);
-            if (jsonMatch) {
-              try {
-                const result = JSON.parse(jsonMatch[0]);
-                resolve(result);
-              } catch (e) {
-                reject(new Error(`Failed to parse benchmark result: ${e}`));
-              }
+            // Extract JSON from stdout
+            const result = this.extractJsonResult(stdout);
+            if (result) {
+              resolve(result);
             } else {
-              reject(new Error("No benchmark result found in output"));
+              logger.error(`[Queue] Failed to extract JSON from stdout.`);
+              logger.error(`[Queue] stdout (first 500 chars): ${stdout.substring(0, 500)}`);
+              logger.error(`[Queue] stdout (last 500 chars): ${stdout.substring(Math.max(0, stdout.length - 500))}`);
+              if (stderr) {
+                logger.error(`[Queue] stderr: ${stderr.substring(0, 500)}`);
+              }
+              reject(new Error("No valid benchmark result found in output"));
             }
           }
         });
@@ -224,11 +282,21 @@ export class BenchmarkQueue extends EventEmitter {
         }, BENCHMARK_TIMEOUT);
 
         proc.stdout.on("data", (data) => {
-          stdout += data.toString();
+          const chunk = data.toString();
+          stdout += chunk;
+          // Log stdout in real-time for debugging
+          if (process.env.DEBUG_BENCHMARK) {
+            logger.log(`[stdout] ${chunk}`);
+          }
         });
 
         proc.stderr.on("data", (data) => {
-          stderr += data.toString();
+          const chunk = data.toString();
+          stderr += chunk;
+          // Log stderr in real-time for debugging
+          if (process.env.DEBUG_BENCHMARK) {
+            logger.error(`[stderr] ${chunk}`);
+          }
         });
 
         // Error handler for spawn failures
@@ -255,17 +323,18 @@ export class BenchmarkQueue extends EventEmitter {
               return;
             }
 
-            // Extract JSON from stdout (last JSON object)
-            const jsonMatch = stdout.match(/\{[\s\S]*"platform"[\s\S]*\}/);
-            if (jsonMatch) {
-              try {
-                const result = JSON.parse(jsonMatch[0]);
-                resolve(result);
-              } catch (e) {
-                reject(new Error(`Failed to parse benchmark result: ${e}`));
-              }
+            // Extract JSON from stdout
+            const result = this.extractJsonResult(stdout);
+            if (result) {
+              resolve(result);
             } else {
-              reject(new Error("No benchmark result found in output"));
+              logger.error(`[Queue] Failed to extract JSON from stdout.`);
+              logger.error(`[Queue] stdout (first 500 chars): ${stdout.substring(0, 500)}`);
+              logger.error(`[Queue] stdout (last 500 chars): ${stdout.substring(Math.max(0, stdout.length - 500))}`);
+              if (stderr) {
+                logger.error(`[Queue] stderr: ${stderr.substring(0, 500)}`);
+              }
+              reject(new Error("No valid benchmark result found in output"));
             }
           }
         });
